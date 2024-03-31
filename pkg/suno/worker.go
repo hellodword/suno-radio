@@ -245,6 +245,15 @@ func (w *Worker) Stream(ctx context.Context, writer io.Writer) error {
 	// TODO prefer the latest clip instead of a random clip
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 
+	wait := func(t time.Duration) {
+		timer := time.NewTimer(t)
+		defer timer.Stop()
+		select {
+		case <-timer.C:
+		case <-ctx.Done():
+		}
+	}
+
 	for {
 		select {
 		case <-w.ctx.Done():
@@ -263,6 +272,7 @@ func (w *Worker) Stream(ctx context.Context, writer io.Writer) error {
 		w.playlistLock.Unlock()
 
 		if clip == nil || clip.ClipMP3Info == nil {
+			wait(time.Millisecond * 100)
 			continue
 		}
 
