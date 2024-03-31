@@ -1,4 +1,4 @@
-package fetcher
+package suno
 
 import (
 	"context"
@@ -8,15 +8,13 @@ import (
 	"net/http"
 	"os"
 	"strconv"
-
-	"github.com/hellodword/suno-radio/pkg/types"
 )
 
-const (
+var (
 	DefaultUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36"
 )
 
-func GetPlaylist(ctx context.Context, id string, page uint) (*types.Playlist, error) {
+func GetPlaylist(ctx context.Context, id string, page uint) (*Playlist, error) {
 	if page == 0 {
 		page = 1
 	}
@@ -40,7 +38,7 @@ func GetPlaylist(ctx context.Context, id string, page uint) (*types.Playlist, er
 
 	defer res.Body.Close()
 
-	var p types.Playlist
+	var p Playlist
 	err = json.NewDecoder(res.Body).Decode(&p)
 	if err != nil {
 		return nil, err

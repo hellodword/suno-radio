@@ -1,4 +1,4 @@
-package types
+package suno
 
 import (
 	"net/http"

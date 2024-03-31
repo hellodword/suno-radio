@@ -9,12 +9,15 @@ I'm very new about streaming media, so this tool maybe buggy, PR welcomes!
 Basicly it's an infinite MP3 stream, so we can play it anywhere:
 
 ```sh
-curl -s http://127.0.0.1:3000/v1/playlist/trending | ffplay -autoexit -nodisp -loglevel quiet -
+curl -s http://127.0.0.1:3000/v1/playlist/trending | \
+  ffplay -autoexit -nodisp -loglevel quiet -
 
-curl -s http://127.0.0.1:3000/v1/playlist/trending | mpv -
+curl -s http://127.0.0.1:3000/v1/playlist/trending | \
+  mpv -
 
 # a test instance for myself, maybe unstable
-curl -s https://revisions-shoes-terrorists-endorsed.trycloudflare.com/v1/playlist/trending | ffplay -autoexit -nodisp -loglevel quiet -
+curl -s https://revisions-shoes-terrorists-endorsed.trycloudflare.com/v1/playlist/trending | \
+  ffplay -autoexit -nodisp -loglevel quiet -
 ```
 
 - Get all playlists
@@ -30,7 +33,8 @@ You can get the playlist id from the URL, for example `cc14084a-2622-4c4b-8258-1
 Also, you'd like to create your own playlist on https://app.suno.ai/me/ and add clips into it.
 
 ```sh
-curl -X PUT -H 'SUNO-RADIO-AUTH: VMkBqnjDUtQB65a9eDKSFhgAIhs8pPdri7rzrd7RO2w' http://127.0.0.1:3000/v1/playlist/cc14084a-2622-4c4b-8258-1f6b4b4f54b3
+curl -X PUT -H 'SUNO-RADIO-AUTH: VMkBqnjDUtQB65a9eDKSFhgAIhs8pPdri7rzrd7RO2w' \
+  http://127.0.0.1:3000/v1/playlist/cc14084a-2622-4c4b-8258-1f6b4b4f54b3
 ```
 
 Bravo! You've got your own music radio! It's hosted on `http://127.0.0.1:3000/v1/playlist/cc14084a-2622-4c4b-8258-1f6b4b4f54b3`
@@ -45,9 +49,10 @@ Bravo! You've got your own music radio! It's hosted on `http://127.0.0.1:3000/v1
 git clone --depth=1 https://github.com/hellodword/suno-radio
 cd suno-radio
 
-go build -trimpath -ldflags "-s -w" -o suno-radio -buildvcs=false ./cmd
+go build -trimpath -ldflags "-s -w" -o suno-radio -buildvcs=false ./cmd/suno-radio
 # or build with docker
-# docker run --rm -v "$(pwd)":/tmp/src -w /tmp/src golang:1-bullseye go build -trimpath -ldflags "-s -w" -o suno-radio -buildvcs=false ./cmd
+# docker run --rm -v "$(pwd)":/tmp/src -w /tmp/src golang:1-bullseye \
+#  go build -trimpath -ldflags "-s -w" -o suno-radio -buildvcs=false ./cmd/suno-radio
 
 ./suno-radio -config ./server.yml
 ```

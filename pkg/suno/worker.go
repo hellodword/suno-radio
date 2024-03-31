@@ -16,19 +16,16 @@ import (
 	"time"
 
 	"github.com/hellodword/suno-radio/3rd/go-mp3"
-	"github.com/hellodword/suno-radio/pkg/fetcher"
-	"github.com/hellodword/suno-radio/pkg/types"
 )
 
 type Worker struct {
 	id           string
-	playlist     *types.Playlist
+	playlist     *Playlist
 	playlistLock sync.Mutex
 
 	dir      string
 	interval time.Duration
 
-	ctx    context.Context
 	wg     sync.WaitGroup
 	logger *slog.Logger
 }
@@ -36,23 +33,23 @@ type Worker struct {
 func NewWorker(ctx context.Context, logger *slog.Logger, id string, interval time.Duration, dir string) (*Worker, error) {
 	var err error
 
-	w := &Worker{id: id, interval: interval, ctx: ctx, dir: dir, logger: logger}
+	w := &Worker{id: id, interval: interval, dir: dir, logger: logger}
 
-	w.logger.InfoContext(w.ctx, "fetching playlist")
+	w.logger.InfoContext(ctx, "fetching playlist")
 	// TODO pagination
-	w.playlist, err = fetcher.GetPlaylist(ctx, id, 1)
+	w.playlist, err = GetPlaylist(ctx, id, 1)
 	if err != nil {
-		w.logger.ErrorContext(w.ctx, "fetch playlist", "err", err)
+		w.logger.ErrorContext(ctx, "fetch playlist", "err", err)
 		return nil, err
 	}
-	w.logger.InfoContext(w.ctx, "fetched playlist")
+	w.logger.InfoContext(ctx, "fetched playlist")
 
 	return w, nil
 }
 
 func (w *Worker) ID() string { return w.id }
 
-func (w *Worker) Start() {
+func (w *Worker) Start(ctx context.Context) {
 
 	w.wg.Add(1)
 	go func() {
@@ -62,13 +59,13 @@ func (w *Worker) Start() {
 		defer ticker.Stop()
 
 		fetch := func() error {
-			w.logger.InfoContext(w.ctx, "fetching playlist")
-			playlist, err := fetcher.GetPlaylist(w.ctx, w.id, 1)
+			w.logger.InfoContext(ctx, "fetching playlist")
+			playlist, err := GetPlaylist(ctx, w.id, 1)
 			if err != nil {
-				w.logger.ErrorContext(w.ctx, "fetch playlist", "err", err)
+				w.logger.ErrorContext(ctx, "fetch playlist", "err", err)
 				return err
 			}
-			w.logger.InfoContext(w.ctx, "fetched playlist")
+			w.logger.InfoContext(ctx, "fetched playlist")
 
 			// remove outdated clips
 			for i := 0; i < len(w.playlist.PlaylistClips); i++ {
@@ -151,9 +148,9 @@ func (w *Worker) Start() {
 						}
 					}
 					if !found {
-						w.logger.InfoContext(w.ctx, "delete unused file", "base", base)
+						w.logger.InfoContext(ctx, "delete unused file", "base", base)
 						if err := os.Remove(p); err != nil {
-							w.logger.ErrorContext(w.ctx, "delete unused file", "base", base, "err", err)
+							w.logger.ErrorContext(ctx, "delete unused file", "base", base, "err", err)
 						}
 					}
 				}
@@ -163,8 +160,8 @@ func (w *Worker) Start() {
 			for _, clip := range clips {
 
 				select {
-				case <-w.ctx.Done():
-					w.logger.InfoContext(w.ctx, "exit")
+				case <-ctx.Done():
+					w.logger.InfoContext(ctx, "exit")
 					return
 				default:
 				}
@@ -178,30 +175,30 @@ func (w *Worker) Start() {
 				} else if stat != nil && clip.ClipMP3Info != nil {
 					minSize := clip.ClipMP3Info.DataOffset + clip.ClipMP3Info.DataSize
 					if stat.Size() < int64(minSize) {
-						w.logger.ErrorContext(w.ctx, "mp3 size not match", "p", p)
+						w.logger.ErrorContext(ctx, "mp3 size not match", "p", p)
 						shouldDownload = true
 					}
 				}
 
 				if shouldDownload {
 					clip.ClipMP3Info = nil
-					w.logger.InfoContext(w.ctx, "downloading mp3", "p", p)
-					err := fetcher.DownloadMP3(w.ctx, clip.Clip.AudioURL, p)
+					w.logger.InfoContext(ctx, "downloading mp3", "p", p)
+					err := DownloadMP3(ctx, clip.Clip.AudioURL, p)
 					if err != nil {
-						w.logger.ErrorContext(w.ctx, "download mp3", "p", p, "err", err)
+						w.logger.ErrorContext(ctx, "download mp3", "p", p, "err", err)
 						continue
 					}
-					w.logger.InfoContext(w.ctx, "downloaded mp3", "p", p)
+					w.logger.InfoContext(ctx, "downloaded mp3", "p", p)
 				}
 
 				if clip.ClipMP3Info == nil {
 					dataOffset, dataSize, err := parse(p)
 					if err != nil {
-						w.logger.ErrorContext(w.ctx, "parse mp3", "p", p, "err", err)
+						w.logger.ErrorContext(ctx, "parse mp3", "p", p, "err", err)
 						continue
 					}
 
-					clip.ClipMP3Info = &types.ClipMP3Info{
+					clip.ClipMP3Info = &ClipMP3Info{
 						DataOffset: dataOffset,
 						DataSize:   dataSize,
 					}
@@ -214,7 +211,7 @@ func (w *Worker) Start() {
 
 		for {
 			select {
-			case <-w.ctx.Done():
+			case <-ctx.Done():
 				return
 			case <-ticker.C:
 				err := fetch()
@@ -256,14 +253,12 @@ func (w *Worker) Stream(ctx context.Context, writer io.Writer) error {
 
 	for {
 		select {
-		case <-w.ctx.Done():
-			return nil
 		case <-ctx.Done():
 			return nil
 		default:
 		}
 
-		var clip *types.PlaylistClip
+		var clip *PlaylistClip
 		w.playlistLock.Lock()
 		l := len(w.playlist.PlaylistClips)
 		if l > 0 {
@@ -283,54 +278,47 @@ func (w *Worker) Stream(ctx context.Context, writer io.Writer) error {
 	}
 }
 
-func (w *Worker) streamClip(ctx context.Context, writer io.Writer, clip *types.PlaylistClip) error {
+func (w *Worker) streamClip(ctx context.Context, writer io.Writer, clip *PlaylistClip) error {
+	p := path.Join(w.dir, fmt.Sprintf("%s.mp3", clip.Clip.ID))
+	f, err := os.Open(p)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
 
-	{
-		p := path.Join(w.dir, fmt.Sprintf("%s.mp3", clip.Clip.ID))
-		f, err := os.Open(p)
-		if err != nil {
-			return err
-		}
-		defer f.Close()
-
-		stat, err := f.Stat()
-		if err != nil {
-			return err
-		}
-		minSize := clip.ClipMP3Info.DataOffset + clip.ClipMP3Info.DataSize
-		if stat.Size() < int64(minSize) {
-			err = fmt.Errorf("file size %s", clip.Clip.ID)
-			// delete file with wrong size
-			defer os.Remove(p)
-			return err
-		}
-
-		pos, err := f.Seek(int64(clip.ClipMP3Info.DataOffset), io.SeekStart)
-		if err != nil {
-			return err
-		}
-
-		if pos != int64(clip.ClipMP3Info.DataOffset) {
-			err = fmt.Errorf("seek %s", clip.Clip.ID)
-			return err
-		}
-
-		written, err := io.CopyN(writer, f, int64(clip.ClipMP3Info.DataSize))
-		if err != nil {
-			return err
-		}
-
-		if written != int64(clip.ClipMP3Info.DataSize) {
-			err = fmt.Errorf("copyN %s", clip.Clip.ID)
-			return err
-		}
-
+	stat, err := f.Stat()
+	if err != nil {
+		return err
+	}
+	minSize := clip.ClipMP3Info.DataOffset + clip.ClipMP3Info.DataSize
+	if stat.Size() < int64(minSize) {
+		err = fmt.Errorf("file size %s", clip.Clip.ID)
+		// delete file with wrong size
+		defer os.Remove(p)
+		return err
 	}
 
+	pos, err := f.Seek(int64(clip.ClipMP3Info.DataOffset), io.SeekStart)
+	if err != nil {
+		return err
+	}
+
+	if pos != int64(clip.ClipMP3Info.DataOffset) {
+		err = fmt.Errorf("seek %s", clip.Clip.ID)
+		return err
+	}
+
+	_, err = io.CopyN(writer, f, int64(clip.ClipMP3Info.DataSize))
+	if err != nil {
+		return err
+	}
+
+	return w.paddingSilence(ctx, writer)
+}
+
+func (w *Worker) paddingSilence(ctx context.Context, writer io.Writer) error {
 	for range 30 { // 3s silence
 		select {
-		case <-w.ctx.Done():
-			return nil
 		case <-ctx.Done():
 			return nil
 		default:
@@ -341,7 +329,6 @@ func (w *Worker) streamClip(ctx context.Context, writer io.Writer, clip *types.P
 			return err
 		}
 	}
-
 	return nil
 }
 

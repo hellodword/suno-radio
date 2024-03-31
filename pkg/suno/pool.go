@@ -12,8 +12,6 @@ import (
 )
 
 type WorkerPool struct {
-	ctx context.Context
-
 	lock sync.Mutex
 	pool []*Worker
 
@@ -22,8 +20,8 @@ type WorkerPool struct {
 	logger   *slog.Logger
 }
 
-func NewWorkerPool(ctx context.Context, logger *slog.Logger, interval time.Duration, dir string) *WorkerPool {
-	return &WorkerPool{ctx: ctx, dir: dir, interval: interval, logger: logger}
+func NewWorkerPool(logger *slog.Logger, interval time.Duration, dir string) *WorkerPool {
+	return &WorkerPool{dir: dir, interval: interval, logger: logger}
 }
 
 func (p *WorkerPool) Contains(id string) bool {
@@ -44,7 +42,7 @@ func (p *WorkerPool) Get(id string) *Worker {
 	return nil
 }
 
-func (p *WorkerPool) IDs() []string {
+func (p *WorkerPool) IDs() StringSlice {
 	var ids = make([]string, 0)
 	for i := range p.pool {
 		ids = append(ids, p.pool[i].ID())
@@ -52,7 +50,7 @@ func (p *WorkerPool) IDs() []string {
 	return ids
 }
 
-func (p *WorkerPool) Add(id string) error {
+func (p *WorkerPool) Add(ctx context.Context, id string) error {
 	if p.Contains(id) {
 		return nil
 	}
@@ -70,7 +68,7 @@ func (p *WorkerPool) Add(id string) error {
 		return err
 	}
 
-	worker, err := NewWorker(p.ctx, p.logger.With("id", id), id, p.interval, dir)
+	worker, err := NewWorker(ctx, p.logger.With("id", id), id, p.interval, dir)
 	if err != nil {
 		return err
 	}
@@ -79,7 +77,7 @@ func (p *WorkerPool) Add(id string) error {
 	p.pool = append(p.pool, worker)
 	p.lock.Unlock()
 
-	worker.Start()
+	worker.Start(ctx)
 
 	return nil
 }

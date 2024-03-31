@@ -2,5 +2,6 @@
 *.mp3
 /data
 suno-radio
+!/cmd/suno-radio
 *.zip
 !/pkg/suno/silence.mp3

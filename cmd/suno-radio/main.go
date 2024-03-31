@@ -19,10 +19,10 @@ import (
 	"github.com/go-chi/chi"
 	"github.com/go-chi/cors"
 	"github.com/go-chi/render"
+	"github.com/hellodword/suno-radio/internal/config"
+	"github.com/hellodword/suno-radio/internal/httperr"
 	"github.com/hellodword/suno-radio/pkg/cloudflared"
 	"github.com/hellodword/suno-radio/pkg/suno"
-	"github.com/hellodword/suno-radio/pkg/types"
-	"gopkg.in/yaml.v3"
 )
 
 const (
@@ -38,29 +38,14 @@ func main() {
 	configPath := flag.String("config", "server.yml", "")
 	flag.Parse()
 
-	var conf = &types.ServerConfig{}
+	conf, err := config.LoadFromYaml(*configPath)
+	if err != nil {
+		panic(err)
+	}
 
-	{
-		b, err := os.ReadFile(*configPath)
-		if err != nil {
-			panic(err)
-		}
-
-		err = yaml.Unmarshal(b, conf)
-		if err != nil {
-			panic(err)
-		}
-
-		err = loggerLevel.UnmarshalText([]byte(conf.LogLevel))
-		if err != nil {
-			panic(err)
-		}
-
-		if conf.DataDir == "" {
-			conf.DataDir = "data"
-		}
-
-		logger.Info("load config", "config", *conf)
+	err = loggerLevel.UnmarshalText([]byte(conf.LogLevel))
+	if err != nil {
+		panic(err)
 	}
 
 	os.MkdirAll(conf.DataDir, 0755)
@@ -75,14 +60,14 @@ func main() {
 	var wg sync.WaitGroup
 	var errC = make(chan error)
 
-	pool := suno.NewWorkerPool(ctx, logger, time.Minute*30, conf.DataDir)
+	pool := suno.NewWorkerPool(logger, time.Minute*30, conf.DataDir)
 
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
 
 		for _, playlist := range []string{suno.PlaylistTrending, suno.PlaylistNew} {
-			err := pool.Add(playlist)
+			err := pool.Add(ctx, playlist)
 			if err != nil {
 				logger.Error("pool add", "playlist", playlist, "err", err)
 				if os.IsPermission(err) || os.IsNotExist(err) {
@@ -103,7 +88,7 @@ func main() {
 			r.Get("/", GetPlaylists(pool, logger))
 			r.Get("/{id}", Radio(pool, logger))
 			if conf.Auth != "" {
-				r.With(Auth(conf.Auth)).Put("/{id}", AddPlaylist(pool, logger))
+				r.With(Auth(conf.Auth)).Put("/{id}", AddPlaylist(ctx, pool, logger))
 			}
 		})
 	})
@@ -147,9 +132,9 @@ func GetPlaylists(pool *suno.WorkerPool, logger *slog.Logger) func(w http.Respon
 	return func(w http.ResponseWriter, r *http.Request) {
 		logger.DebugContext(r.Context(), "GetPlaylists")
 		ids := pool.IDs()
-		if err := render.Render(w, r, types.StringSlice(ids)); err != nil {
+		if err := render.Render(w, r, ids); err != nil {
 			logger.ErrorContext(r.Context(), "GetPlaylists", "err", err)
-			_ = render.Render(w, r, types.ErrHTTPStatus(http.StatusUnprocessableEntity, err))
+			_ = render.Render(w, r, httperr.ErrHTTPStatus(http.StatusUnprocessableEntity, err))
 			return
 		}
 	}
@@ -170,13 +155,13 @@ func Radio(pool *suno.WorkerPool, logger *slog.Logger) func(w http.ResponseWrite
 		}
 
 		if len(id) != UUIDLength {
-			_ = render.Render(w, r, types.ErrHTTPStatus(http.StatusBadRequest, nil))
+			_ = render.Render(w, r, httperr.ErrHTTPStatus(http.StatusBadRequest, nil))
 			return
 		}
 
 		found := pool.Contains(id)
 		if !found {
-			_ = render.Render(w, r, types.ErrHTTPStatus(http.StatusBadRequest, nil))
+			_ = render.Render(w, r, httperr.ErrHTTPStatus(http.StatusBadRequest, nil))
 			return
 		}
 
@@ -197,29 +182,29 @@ func Radio(pool *suno.WorkerPool, logger *slog.Logger) func(w http.ResponseWrite
 	}
 }
 
-func AddPlaylist(pool *suno.WorkerPool, logger *slog.Logger) func(w http.ResponseWriter, r *http.Request) {
+func AddPlaylist(ctx context.Context, pool *suno.WorkerPool, logger *slog.Logger) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
 
 		if len(id) != UUIDLength {
-			_ = render.Render(w, r, types.ErrHTTPStatus(http.StatusBadRequest, nil))
+			_ = render.Render(w, r, httperr.ErrHTTPStatus(http.StatusBadRequest, nil))
 			return
 		}
 
 		found := pool.Contains(id)
 		if !found {
-			err := pool.Add(id)
+			err := pool.Add(ctx, id)
 			if err != nil {
 				logger.ErrorContext(r.Context(), "AddPlaylist", "err", err)
-				_ = render.Render(w, r, types.ErrHTTPStatus(http.StatusInternalServerError, err))
+				_ = render.Render(w, r, httperr.ErrHTTPStatus(http.StatusInternalServerError, err))
 				return
 			}
 		}
 
 		ids := pool.IDs()
-		if err := render.Render(w, r, types.StringSlice(ids)); err != nil {
+		if err := render.Render(w, r, ids); err != nil {
 			logger.ErrorContext(r.Context(), "AddPlaylist", "err", err)
-			_ = render.Render(w, r, types.ErrHTTPStatus(http.StatusUnprocessableEntity, err))
+			_ = render.Render(w, r, httperr.ErrHTTPStatus(http.StatusUnprocessableEntity, err))
 			return
 		}
 	}
@@ -231,7 +216,7 @@ func Auth(auth string) func(http.Handler) http.Handler {
 			rauth := strings.TrimSpace(r.Header.Get("SUNO-RADIO-AUTH"))
 
 			if subtle.ConstantTimeCompare([]byte(auth), []byte(rauth)) != 1 {
-				_ = render.Render(w, r, types.ErrHTTPStatus(http.StatusUnauthorized, nil))
+				_ = render.Render(w, r, httperr.ErrHTTPStatus(http.StatusUnauthorized, nil))
 				return
 			}
 

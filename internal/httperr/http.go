@@ -1,5 +1,5 @@
 // https://github.com/jonnylangefeld/go-api/blob/c43e67c7d2d8626f1eaf724bf471272ee25b6dff/pkg/types/types.go
-package types
+package httperr
 
 import (
 	"net/http"
