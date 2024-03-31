@@ -1,0 +1,6 @@
+.env
+*.mp3
+/data
+suno-radio
+*.zip
+!/pkg/suno/silence.mp3

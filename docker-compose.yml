@@ -1,0 +1,43 @@
+version: "3"
+
+services:
+  app:
+    deploy:
+      resources:
+        limits:
+          cpus: "0.7"
+          memory: 768M
+    logging:
+      driver: "local"
+      options:
+        max-size: "50m"
+    image: gcr.io/distroless/base-debian12:nonroot
+    restart: always
+    # ports:
+    #   - "127.0.0.1:3000:3000"
+    volumes:
+      # https://github.com/GoogleContainerTools/distroless/issues/427#issuecomment-547874186
+      # mkdir data; chown 65532:65532 data
+      - .:/home/nonroot/suno-radio:rw
+    working_dir: "/home/nonroot/suno-radio"
+    entrypoint:
+      [
+        "/home/nonroot/suno-radio/suno-radio",
+        "-config",
+        "/home/nonroot/suno-radio/server.yml",
+      ]
+
+  pub:
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+    logging:
+      driver: "local"
+      options:
+        max-size: "10m"
+    network_mode: "service:app"
+    image: cloudflare/cloudflared:latest
+    restart: always
+    command: tunnel --no-autoupdate --loglevel info --transport-loglevel fatal --quick-service http://127.0.0.1:7890 --url http://127.0.0.1:3000

@@ -1,0 +1,288 @@
+diff --git a/decode.go b/decode.go
+index c625cc1..0021653 100644
+--- a/decode.go
++++ b/decode.go
+@@ -18,9 +18,9 @@ import (
+ 	"errors"
+ 	"io"
+ 
+-	"github.com/hajimehoshi/go-mp3/internal/consts"
+-	"github.com/hajimehoshi/go-mp3/internal/frame"
+-	"github.com/hajimehoshi/go-mp3/internal/frameheader"
++	"github.com/hellodword/suno-radio/3rd/go-mp3/internal/consts"
++	"github.com/hellodword/suno-radio/3rd/go-mp3/internal/frame"
++	"github.com/hellodword/suno-radio/3rd/go-mp3/internal/frameheader"
+ )
+ 
+ // A Decoder is a MP3-decoded stream.
+@@ -35,6 +35,9 @@ type Decoder struct {
+ 	frame         *frame.Frame
+ 	pos           int64
+ 	bytesPerFrame int64
++
++	dataOffset uint64
++	dataSize   uint64
+ }
+ 
+ func (d *Decoder) readFrame() error {
+@@ -150,6 +153,7 @@ func (d *Decoder) ensureFrameStartsAndLength() error {
+ 		return err
+ 	}
+ 	l := int64(0)
++	d.dataOffset = uint64(d.source.pos)
+ 	for {
+ 		h, pos, err := frameheader.Read(d.source, d.source.pos)
+ 		if err != nil {
+@@ -177,6 +181,7 @@ func (d *Decoder) ensureFrameStartsAndLength() error {
+ 			}
+ 			return err
+ 		}
++		d.dataSize = uint64(d.source.pos) - d.dataOffset
+ 	}
+ 	d.length = l
+ 
+@@ -229,3 +234,7 @@ func NewDecoder(r io.Reader) (*Decoder, error) {
+ 
+ 	return d, nil
+ }
++
++func (d *Decoder) DataOffset() (dataOffset uint64, dataSize uint64) {
++	return d.dataOffset, d.dataSize
++}
+diff --git a/example/classic.mp3 b/example/classic.mp3
+deleted file mode 100644
+index 17ec298..0000000
+Binary files a/example/classic.mp3 and /dev/null differ
+diff --git a/example/license.md b/example/license.md
+deleted file mode 100644
+index 4ecc296..0000000
+--- a/example/license.md
++++ /dev/null
+@@ -1,9 +0,0 @@
+-# classic.mp3
+-
+-Licensed under the EFF OAL License
+-
+-http://freemusicarchive.org/music/Advent_Chamber_Orchestra/Selections_from_the_2005-2006_Season/Advent_Chamber_Orchestra_-_04_-_Mozart_-_A_Little_Night_Music_allegro
+-
+-# mpeg2.mp3
+-
+-This audio file contains speech synthesized parts of Alice's Adventures in Wonderland by Lewis Carroll, published in 1865. Due to the release date this work is under public domain.
+\ No newline at end of file
+diff --git a/example/main.go b/example/main.go
+deleted file mode 100644
+index 19fa065..0000000
+--- a/example/main.go
++++ /dev/null
+@@ -1,67 +0,0 @@
+-// Copyright 2017 Hajime Hoshi
+-//
+-// Licensed under the Apache License, Version 2.0 (the "License");
+-// you may not use this file except in compliance with the License.
+-// You may obtain a copy of the License at
+-//
+-//     http://www.apache.org/licenses/LICENSE-2.0
+-//
+-// Unless required by applicable law or agreed to in writing, software
+-// distributed under the License is distributed on an "AS IS" BASIS,
+-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+-// See the License for the specific language governing permissions and
+-// limitations under the License.
+-
+-// +build example
+-
+-package main
+-
+-import (
+-	"fmt"
+-	"log"
+-	"os"
+-	"time"
+-
+-	"github.com/hajimehoshi/oto/v2"
+-
+-	"github.com/hajimehoshi/go-mp3"
+-)
+-
+-func run() error {
+-	f, err := os.Open("classic.mp3")
+-	if err != nil {
+-		return err
+-	}
+-	defer f.Close()
+-
+-	d, err := mp3.NewDecoder(f)
+-	if err != nil {
+-		return err
+-	}
+-
+-	c, ready, err := oto.NewContext(d.SampleRate(), 2, 2)
+-	if err != nil {
+-		return err
+-	}
+-	<-ready
+-
+-	p := c.NewPlayer(d)
+-	defer p.Close()
+-	p.Play()
+-
+-	fmt.Printf("Length: %d[bytes]\n", d.Length())
+-	for {
+-		time.Sleep(time.Second)
+-		if !p.IsPlaying() {
+-			break
+-		}
+-	}
+-
+-	return nil
+-}
+-
+-func main() {
+-	if err := run(); err != nil {
+-		log.Fatal(err)
+-	}
+-}
+diff --git a/example/mpeg2.mp3 b/example/mpeg2.mp3
+deleted file mode 100644
+index 41296c0..0000000
+Binary files a/example/mpeg2.mp3 and /dev/null differ
+diff --git a/go.mod b/go.mod
+deleted file mode 100644
+index edea794..0000000
+--- a/go.mod
++++ /dev/null
+@@ -1,5 +0,0 @@
+-module github.com/hajimehoshi/go-mp3
+-
+-go 1.14
+-
+-require github.com/hajimehoshi/oto/v2 v2.3.1
+diff --git a/go.sum b/go.sum
+deleted file mode 100644
+index f6f8e8a..0000000
+--- a/go.sum
++++ /dev/null
+@@ -1,4 +0,0 @@
+-github.com/hajimehoshi/oto/v2 v2.3.1 h1:qrLKpNus2UfD674oxckKjNJmesp9hMh7u7QCrStB3Rc=
+-github.com/hajimehoshi/oto/v2 v2.3.1/go.mod h1:seWLbgHH7AyUMYKfKYT9pg7PhUu9/SisyJvNTT+ASQo=
+-golang.org/x/sys v0.0.0-20220712014510-0a85c31ab51e h1:NHvCuwuS43lGnYhten69ZWqi2QOj/CiDNcKbVqwVoew=
+-golang.org/x/sys v0.0.0-20220712014510-0a85c31ab51e/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
+diff --git a/internal/bits/bits_test.go b/internal/bits/bits_test.go
+index 70ea76f..bd89b42 100644
+--- a/internal/bits/bits_test.go
++++ b/internal/bits/bits_test.go
+@@ -17,7 +17,7 @@ package bits_test
+ import (
+ 	"testing"
+ 
+-	. "github.com/hajimehoshi/go-mp3/internal/bits"
++	. "github.com/hellodword/suno-radio/3rd/go-mp3/internal/bits"
+ )
+ 
+ func TestBits(t *testing.T) {
+diff --git a/internal/frame/frame.go b/internal/frame/frame.go
+index 3532e6c..d004685 100644
+--- a/internal/frame/frame.go
++++ b/internal/frame/frame.go
+@@ -19,12 +19,12 @@ import (
+ 	"io"
+ 	"math"
+ 
+-	"github.com/hajimehoshi/go-mp3/internal/bits"
+-	"github.com/hajimehoshi/go-mp3/internal/consts"
+-	"github.com/hajimehoshi/go-mp3/internal/frameheader"
+-	"github.com/hajimehoshi/go-mp3/internal/imdct"
+-	"github.com/hajimehoshi/go-mp3/internal/maindata"
+-	"github.com/hajimehoshi/go-mp3/internal/sideinfo"
++	"github.com/hellodword/suno-radio/3rd/go-mp3/internal/bits"
++	"github.com/hellodword/suno-radio/3rd/go-mp3/internal/consts"
++	"github.com/hellodword/suno-radio/3rd/go-mp3/internal/frameheader"
++	"github.com/hellodword/suno-radio/3rd/go-mp3/internal/imdct"
++	"github.com/hellodword/suno-radio/3rd/go-mp3/internal/maindata"
++	"github.com/hellodword/suno-radio/3rd/go-mp3/internal/sideinfo"
+ )
+ 
+ var (
+diff --git a/internal/frameheader/frameheader.go b/internal/frameheader/frameheader.go
+index 5bb23d5..4115c7a 100644
+--- a/internal/frameheader/frameheader.go
++++ b/internal/frameheader/frameheader.go
+@@ -19,7 +19,7 @@ import (
+ 	"fmt"
+ 	"io"
+ 
+-	"github.com/hajimehoshi/go-mp3/internal/consts"
++	"github.com/hellodword/suno-radio/3rd/go-mp3/internal/consts"
+ )
+ 
+ // A mepg1FrameHeader is MPEG1 Layer 1-3 frame header
+diff --git a/internal/huffman/huffman.go b/internal/huffman/huffman.go
+index abc3005..baecc74 100644
+--- a/internal/huffman/huffman.go
++++ b/internal/huffman/huffman.go
+@@ -17,7 +17,7 @@ package huffman
+ import (
+ 	"fmt"
+ 
+-	"github.com/hajimehoshi/go-mp3/internal/bits"
++	"github.com/hellodword/suno-radio/3rd/go-mp3/internal/bits"
+ )
+ 
+ var huffmanTable = []uint16{
+diff --git a/internal/maindata/huffman.go b/internal/maindata/huffman.go
+index 191939a..39ae9ee 100644
+--- a/internal/maindata/huffman.go
++++ b/internal/maindata/huffman.go
+@@ -17,11 +17,11 @@ package maindata
+ import (
+ 	"fmt"
+ 
+-	"github.com/hajimehoshi/go-mp3/internal/bits"
+-	"github.com/hajimehoshi/go-mp3/internal/consts"
+-	"github.com/hajimehoshi/go-mp3/internal/frameheader"
+-	"github.com/hajimehoshi/go-mp3/internal/huffman"
+-	"github.com/hajimehoshi/go-mp3/internal/sideinfo"
++	"github.com/hellodword/suno-radio/3rd/go-mp3/internal/bits"
++	"github.com/hellodword/suno-radio/3rd/go-mp3/internal/consts"
++	"github.com/hellodword/suno-radio/3rd/go-mp3/internal/frameheader"
++	"github.com/hellodword/suno-radio/3rd/go-mp3/internal/huffman"
++	"github.com/hellodword/suno-radio/3rd/go-mp3/internal/sideinfo"
+ )
+ 
+ func readHuffman(m *bits.Bits, header frameheader.FrameHeader, sideInfo *sideinfo.SideInfo, mainData *MainData, part_2_start, gr, ch int) error {
+diff --git a/internal/maindata/maindata.go b/internal/maindata/maindata.go
+index 7eb4159..b651701 100644
+--- a/internal/maindata/maindata.go
++++ b/internal/maindata/maindata.go
+@@ -18,10 +18,10 @@ import (
+ 	"fmt"
+ 	"io"
+ 
+-	"github.com/hajimehoshi/go-mp3/internal/bits"
+-	"github.com/hajimehoshi/go-mp3/internal/consts"
+-	"github.com/hajimehoshi/go-mp3/internal/frameheader"
+-	"github.com/hajimehoshi/go-mp3/internal/sideinfo"
++	"github.com/hellodword/suno-radio/3rd/go-mp3/internal/bits"
++	"github.com/hellodword/suno-radio/3rd/go-mp3/internal/consts"
++	"github.com/hellodword/suno-radio/3rd/go-mp3/internal/frameheader"
++	"github.com/hellodword/suno-radio/3rd/go-mp3/internal/sideinfo"
+ )
+ 
+ type FullReader interface {
+diff --git a/internal/sideinfo/sideinfo.go b/internal/sideinfo/sideinfo.go
+index f601dae..b242f30 100644
+--- a/internal/sideinfo/sideinfo.go
++++ b/internal/sideinfo/sideinfo.go
+@@ -18,9 +18,9 @@ import (
+ 	"fmt"
+ 	"io"
+ 
+-	"github.com/hajimehoshi/go-mp3/internal/bits"
+-	"github.com/hajimehoshi/go-mp3/internal/consts"
+-	"github.com/hajimehoshi/go-mp3/internal/frameheader"
++	"github.com/hellodword/suno-radio/3rd/go-mp3/internal/bits"
++	"github.com/hellodword/suno-radio/3rd/go-mp3/internal/consts"
++	"github.com/hellodword/suno-radio/3rd/go-mp3/internal/frameheader"
+ )
+ 
+ type FullReader interface {
