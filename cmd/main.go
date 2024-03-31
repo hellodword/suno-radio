@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/subtle"
 	"errors"
 	"flag"
 	"log/slog"
@@ -9,6 +10,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -55,11 +57,13 @@ func main() {
 		}
 
 		if conf.DataDir == "" {
-			conf.DataDir = "."
+			conf.DataDir = "data"
 		}
 
 		logger.Info("load config", "config", *conf)
 	}
+
+	os.MkdirAll(conf.DataDir, 0755)
 
 	// cache and reuse the *.trycloudflare.com
 	// nginx is too heavy for this so ...
@@ -96,9 +100,11 @@ func main() {
 
 	r.Route("/v1", func(r chi.Router) {
 		r.Route("/playlist", func(r chi.Router) {
-			r.Get("/", GetPaylists(pool, logger))
+			r.Get("/", GetPlaylists(pool, logger))
 			r.Get("/{id}", Radio(pool, logger))
-			// TODO add playlist
+			if conf.Auth != "" {
+				r.With(Auth(conf.Auth)).Put("/{id}", AddPlaylist(pool, logger))
+			}
 		})
 	})
 
@@ -137,12 +143,12 @@ func main() {
 
 }
 
-func GetPaylists(pool *suno.WorkerPool, logger *slog.Logger) func(w http.ResponseWriter, r *http.Request) {
+func GetPlaylists(pool *suno.WorkerPool, logger *slog.Logger) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
-		logger.DebugContext(r.Context(), "GetPaylists")
+		logger.DebugContext(r.Context(), "GetPlaylists")
 		ids := pool.IDs()
 		if err := render.Render(w, r, types.StringSlice(ids)); err != nil {
-			logger.ErrorContext(r.Context(), "GetPaylists", "err", err)
+			logger.ErrorContext(r.Context(), "GetPlaylists", "err", err)
 			_ = render.Render(w, r, types.ErrHTTPStatus(http.StatusUnprocessableEntity, err))
 			return
 		}
@@ -188,5 +194,48 @@ func Radio(pool *suno.WorkerPool, logger *slog.Logger) func(w http.ResponseWrite
 			// _ = render.Render(w, r, types.ErrHTTPStatus(http.StatusInternalServerError, err))
 			return
 		}
+	}
+}
+
+func AddPlaylist(pool *suno.WorkerPool, logger *slog.Logger) func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id := chi.URLParam(r, "id")
+
+		if len(id) != UUIDLength {
+			_ = render.Render(w, r, types.ErrHTTPStatus(http.StatusBadRequest, nil))
+			return
+		}
+
+		found := pool.Contains(id)
+		if !found {
+			err := pool.Add(id)
+			if err != nil {
+				logger.ErrorContext(r.Context(), "AddPlaylist", "err", err)
+				_ = render.Render(w, r, types.ErrHTTPStatus(http.StatusInternalServerError, err))
+				return
+			}
+		}
+
+		ids := pool.IDs()
+		if err := render.Render(w, r, types.StringSlice(ids)); err != nil {
+			logger.ErrorContext(r.Context(), "AddPlaylist", "err", err)
+			_ = render.Render(w, r, types.ErrHTTPStatus(http.StatusUnprocessableEntity, err))
+			return
+		}
+	}
+}
+
+func Auth(auth string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			rauth := strings.TrimSpace(r.Header.Get("SUNO-RADIO-AUTH"))
+
+			if subtle.ConstantTimeCompare([]byte(auth), []byte(rauth)) != 1 {
+				_ = render.Render(w, r, types.ErrHTTPStatus(http.StatusUnauthorized, nil))
+				return
+			}
+
+			next.ServeHTTP(w, r)
+		})
 	}
 }
