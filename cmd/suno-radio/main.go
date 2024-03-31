@@ -122,17 +122,15 @@ func main() {
 	}
 	cancel()
 	wg.Wait()
-	for _, id := range pool.IDs() {
-		pool.Get(id).Close()
-	}
+	pool.Close()
 
 }
 
 func GetPlaylists(pool *suno.WorkerPool, logger *slog.Logger) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		logger.DebugContext(r.Context(), "GetPlaylists")
-		ids := pool.IDs()
-		if err := render.Render(w, r, ids); err != nil {
+		infos := pool.Infos()
+		if err := render.Render(w, r, infos); err != nil {
 			logger.ErrorContext(r.Context(), "GetPlaylists", "err", err)
 			_ = render.Render(w, r, httperr.ErrHTTPStatus(http.StatusUnprocessableEntity, err))
 			return
@@ -201,8 +199,8 @@ func AddPlaylist(ctx context.Context, pool *suno.WorkerPool, logger *slog.Logger
 			}
 		}
 
-		ids := pool.IDs()
-		if err := render.Render(w, r, ids); err != nil {
+		infos := pool.Infos()
+		if err := render.Render(w, r, infos); err != nil {
 			logger.ErrorContext(r.Context(), "AddPlaylist", "err", err)
 			_ = render.Render(w, r, httperr.ErrHTTPStatus(http.StatusUnprocessableEntity, err))
 			return

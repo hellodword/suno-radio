@@ -63,16 +63,20 @@ func (s PlaylistClips) Swap(i, j int) {
 	s[i], s[j] = s[j], s[i]
 }
 
+type PlaylistInfo struct {
+	ID          string `json:"id"`
+	Name        string `json:"name,omitempty"`
+	Description string `json:"description,omitempty"`
+}
+
 type Playlist struct {
-	ID            string        `json:"id"`
+	PlaylistInfo
 	PlaylistClips PlaylistClips `json:"playlist_clips,omitempty"`
 	// ImageURL        string `json:"image_url,omitempty"`
 	// NumTotalResults int    `json:"num_total_results,omitempty"`
 	// CurrentPage     int    `json:"current_page,omitempty"`
 	// IsOwned         bool   `json:"is_owned,omitempty"`
 	// IsTrashed       bool   `json:"is_trashed,omitempty"`
-	// Name            string `json:"name,omitempty"`
-	// Description     string `json:"description,omitempty"`
 	// IsPublic        bool   `json:"is_public,omitempty"`
 	// IsDiscoverPlaylist any    `json:"is_discover_playlist,omitempty"`
 }
@@ -82,8 +86,8 @@ type ClipMP3Info struct {
 	DataOffset uint64 `json:"data_offset,omitempty"`
 }
 
-type StringSlice []string
+type PlaylistInfos []PlaylistInfo
 
-func (StringSlice) Render(http.ResponseWriter, *http.Request) error {
+func (PlaylistInfos) Render(http.ResponseWriter, *http.Request) error {
 	return nil
 }

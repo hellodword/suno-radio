@@ -47,7 +47,8 @@ func NewWorker(ctx context.Context, logger *slog.Logger, id string, interval tim
 	return w, nil
 }
 
-func (w *Worker) ID() string { return w.id }
+func (w *Worker) ID() string         { return w.id }
+func (w *Worker) Info() PlaylistInfo { return w.playlist.PlaylistInfo }
 
 func (w *Worker) Start(ctx context.Context) {
 

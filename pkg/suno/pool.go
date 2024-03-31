@@ -42,12 +42,12 @@ func (p *WorkerPool) Get(id string) *Worker {
 	return nil
 }
 
-func (p *WorkerPool) IDs() StringSlice {
-	var ids = make([]string, 0)
+func (p *WorkerPool) Infos() PlaylistInfos {
+	var infos = make(PlaylistInfos, 0)
 	for i := range p.pool {
-		ids = append(ids, p.pool[i].ID())
+		infos = append(infos, p.pool[i].Info())
 	}
-	return ids
+	return infos
 }
 
 func (p *WorkerPool) Add(ctx context.Context, id string) error {
@@ -79,5 +79,12 @@ func (p *WorkerPool) Add(ctx context.Context, id string) error {
 
 	worker.Start(ctx)
 
+	return nil
+}
+
+func (p *WorkerPool) Close() error {
+	for i := range p.pool {
+		p.pool[i].Close()
+	}
 	return nil
 }
