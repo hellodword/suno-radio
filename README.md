@@ -1,5 +1,7 @@
 # suno-radio
 
+[![Matrix Space](https://img.shields.io/matrix/suno-radio:matrix.org)](https://matrix.to/#/#suno-radio:matrix.org)
+
 Turn a suno playlist into a random music radio!
 
 I'm very new about streaming media, so this tool maybe buggy, PR welcomes!

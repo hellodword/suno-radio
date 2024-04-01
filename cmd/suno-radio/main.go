@@ -191,6 +191,7 @@ func AddPlaylist(ctx context.Context, pool *suno.WorkerPool, logger *slog.Logger
 
 		found := pool.Contains(id)
 		if !found {
+			// the r.Context() wont work for this, pass the ctx from func main
 			err := pool.Add(ctx, id)
 			if err != nil {
 				logger.ErrorContext(r.Context(), "AddPlaylist", "err", err)
