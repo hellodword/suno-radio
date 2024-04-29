@@ -54,6 +54,10 @@ func GetPlaylist(ctx context.Context, id string, page uint) (*Playlist, error) {
 
 func DownloadMP3(ctx context.Context, u, path string) error {
 
+	tmpPath := path + ".tmp"
+	os.Remove(tmpPath)
+	os.Remove(path)
+
 	c := &http.Client{
 		Transport: http.DefaultTransport,
 	}
@@ -93,7 +97,7 @@ func DownloadMP3(ctx context.Context, u, path string) error {
 		return err
 	}
 
-	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+	f, err := os.OpenFile(tmpPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
 	if err != nil {
 		return err
 	}
@@ -109,5 +113,5 @@ func DownloadMP3(ctx context.Context, u, path string) error {
 		return err
 	}
 
-	return nil
+	return os.Rename(tmpPath, path)
 }

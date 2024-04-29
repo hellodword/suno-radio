@@ -1,7 +1,33 @@
 version: "3"
 
 services:
+  converter:
+    hostname: converter
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 768M
+    logging:
+      driver: "local"
+      options:
+        max-size: "50m"
+    image: linuxserver/ffmpeg:latest
+    restart: always
+    user: "65532:65532"
+    volumes:
+      - .:/w:rw
+    working_dir: "/w"
+    entrypoint: ["/w/mp3-to-wav"]
+    healthcheck:
+      test: ["CMD", "nc", "-z", "127.0.0.1", "3001"]
+      interval: 1s
+      timeout: 10s
+
   app:
+    depends_on:
+      converter:
+        condition: service_healthy
     deploy:
       resources:
         limits:

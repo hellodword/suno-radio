@@ -6,3 +6,5 @@ data_dir: data
 # disable the ability of adding new playlist by keeping it empty
 # generate your own auth string
 auth: VMkBqnjDUtQB65a9eDKSFhgAIhs8pPdri7rzrd7RO2w
+cloudflared: false
+rpc: "127.0.0.1:3001"

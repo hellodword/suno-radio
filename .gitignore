@@ -4,4 +4,9 @@
 suno-radio
 !/cmd/suno-radio
 *.zip
-!/pkg/suno/silence.mp3
+/*.txt
+*.wav
+*.log
+mp3-to-wav
+!/cmd/mp3-to-wav
+dist

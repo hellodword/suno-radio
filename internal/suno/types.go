@@ -8,7 +8,7 @@ import (
 type DownloadStatus uint8
 
 type PlaylistClip struct {
-	ClipMP3Info *ClipMP3Info `json:"clip_mp3_info,omitempty"`
+	ClipWavInfo *ClipWavInfo `json:"clip_mp3_info,omitempty"`
 	Clip        struct {
 		ID string `json:"id,omitempty"`
 		// VideoURL          string `json:"video_url,omitempty"`
@@ -81,7 +81,7 @@ type Playlist struct {
 	// IsDiscoverPlaylist any    `json:"is_discover_playlist,omitempty"`
 }
 
-type ClipMP3Info struct {
+type ClipWavInfo struct {
 	DataSize   uint64 `json:"data_size,omitempty"`
 	DataOffset uint64 `json:"data_offset,omitempty"`
 }

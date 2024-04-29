@@ -2,12 +2,12 @@ package suno
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"io/fs"
 	"log/slog"
 	"math/rand"
+	"net/rpc"
 	"os"
 	"path"
 	"path/filepath"
@@ -15,7 +15,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/hellodword/suno-radio/3rd/go-mp3"
+	"github.com/go-audio/wav"
+	"github.com/hellodword/suno-radio/internal/common"
 )
 
 type Worker struct {
@@ -28,12 +29,14 @@ type Worker struct {
 
 	wg     sync.WaitGroup
 	logger *slog.Logger
+
+	converterRpc *rpc.Client
 }
 
-func NewWorker(ctx context.Context, logger *slog.Logger, id string, interval time.Duration, dir string) (*Worker, error) {
+func NewWorker(ctx context.Context, logger *slog.Logger, id string, interval time.Duration, dir string, converterRpc *rpc.Client) (*Worker, error) {
 	var err error
 
-	w := &Worker{id: id, interval: interval, dir: dir, logger: logger}
+	w := &Worker{id: id, interval: interval, dir: dir, logger: logger, converterRpc: converterRpc}
 
 	w.logger.InfoContext(ctx, "fetching playlist")
 	// TODO pagination
@@ -107,24 +110,47 @@ func (w *Worker) Start(ctx context.Context) {
 			return nil
 		}
 
-		parse := func(p string) (uint64, uint64, error) {
+		parseWav := func(p string) (uint64, uint64, error) {
 			f, err := os.Open(p)
 			if err != nil {
 				return 0, 0, err
 			}
+			defer f.Close()
 
-			d, err := mp3.NewDecoder(f)
+			d := wav.NewDecoder(f)
+			d.ReadInfo()
+			if d.SampleRate != DefaultWavSampleRate {
+				err := fmt.Errorf("sample rate %d", d.SampleRate)
+				return 0, 0, err
+			}
+
+			err = d.FwdToPCM()
 			if err != nil {
 				return 0, 0, err
 			}
 
-			if d.SampleRate() != DefaultSampleRate {
-				err := fmt.Errorf("sample rate %d", d.SampleRate())
+			pos, err := f.Seek(0, io.SeekCurrent)
+			if err != nil {
 				return 0, 0, err
 			}
 
-			dataOffset, dataSize := d.DataOffset()
-			return dataOffset, dataSize, nil
+			return uint64(pos), uint64(d.PCMLen()), nil
+		}
+
+		isFilePrepared := func(clip *PlaylistClip) (downloaded, converted bool) {
+			pmp3 := path.Join(w.dir, fmt.Sprintf("%s.mp3", clip.Clip.ID))
+			pwav := path.Join(w.dir, fmt.Sprintf("%s.wav", clip.Clip.ID))
+			stat, err := os.Stat(pmp3)
+			downloaded = err == nil && stat != nil && !stat.IsDir()
+			if !downloaded {
+				return
+			}
+
+			stat, err = os.Stat(pwav)
+
+			converted = err == nil && stat != nil && !stat.IsDir()
+
+			return
 		}
 
 		download := func() {
@@ -158,6 +184,7 @@ func (w *Worker) Start(ctx context.Context) {
 				return nil
 			})
 
+			// downloaded clips
 			for _, clip := range clips {
 
 				select {
@@ -167,39 +194,98 @@ func (w *Worker) Start(ctx context.Context) {
 				default:
 				}
 
-				p := path.Join(w.dir, fmt.Sprintf("%s.mp3", clip.Clip.ID))
+				pmp3 := path.Join(w.dir, fmt.Sprintf("%s.mp3", clip.Clip.ID))
+				pwav := path.Join(w.dir, fmt.Sprintf("%s.wav", clip.Clip.ID))
 
-				shouldDownload := false
-				stat, err := os.Stat(p)
-				if errors.Is(err, os.ErrNotExist) {
-					shouldDownload = true
-				} else if stat != nil && clip.ClipMP3Info != nil {
-					minSize := clip.ClipMP3Info.DataOffset + clip.ClipMP3Info.DataSize
-					if stat.Size() < int64(minSize) {
-						w.logger.ErrorContext(ctx, "mp3 size not match", "p", p)
-						shouldDownload = true
-					}
+				downloaded, converted := isFilePrepared(clip)
+				if !downloaded {
+					os.Remove(pmp3)
+					continue
 				}
 
-				if shouldDownload {
-					clip.ClipMP3Info = nil
-					w.logger.InfoContext(ctx, "downloading mp3", "p", p)
-					err := DownloadMP3(ctx, clip.Clip.AudioURL, p)
+				if !converted {
+					w.logger.InfoContext(ctx, "converting mp3 to wav", "p", pmp3)
+					err := common.MP3ToWavConverterConvert(w.converterRpc, common.MP3ToWavConverterArgs{
+						Playlist: w.id,
+						ClipID:   clip.Clip.ID,
+					})
 					if err != nil {
-						w.logger.ErrorContext(ctx, "download mp3", "p", p, "err", err)
+						os.Remove(pwav)
+						w.logger.ErrorContext(ctx, "convert mp3 to wav", "p", pmp3, "err", err)
 						continue
 					}
-					w.logger.InfoContext(ctx, "downloaded mp3", "p", p)
+					w.logger.InfoContext(ctx, "converted mp3 to wav", "p", pmp3)
 				}
 
-				if clip.ClipMP3Info == nil {
-					dataOffset, dataSize, err := parse(p)
+				if clip.ClipWavInfo == nil {
+					dataOffset, dataSize, err := parseWav(pwav)
 					if err != nil {
-						w.logger.ErrorContext(ctx, "parse mp3", "p", p, "err", err)
+						os.Remove(pwav)
+						w.logger.ErrorContext(ctx, "parse wav", "p", pwav, "err", err)
 						continue
 					}
 
-					clip.ClipMP3Info = &ClipMP3Info{
+					w.logger.InfoContext(ctx, "added", "id", clip.Clip.ID, "offset", dataOffset, "data size", dataSize)
+					clip.ClipWavInfo = &ClipWavInfo{
+						DataOffset: dataOffset,
+						DataSize:   dataSize,
+					}
+				}
+			}
+
+			for _, clip := range clips {
+
+				select {
+				case <-ctx.Done():
+					w.logger.InfoContext(ctx, "exit")
+					return
+				default:
+				}
+
+				if clip.ClipWavInfo != nil {
+					continue
+				}
+
+				pmp3 := path.Join(w.dir, fmt.Sprintf("%s.mp3", clip.Clip.ID))
+				pwav := path.Join(w.dir, fmt.Sprintf("%s.wav", clip.Clip.ID))
+
+				downloaded, converted := isFilePrepared(clip)
+				if !downloaded {
+
+					w.logger.InfoContext(ctx, "downloading mp3", "p", pmp3)
+					err := DownloadMP3(ctx, clip.Clip.AudioURL, pmp3)
+					if err != nil {
+						w.logger.ErrorContext(ctx, "download mp3", "p", pmp3, "err", err)
+						continue
+					}
+					w.logger.InfoContext(ctx, "downloaded mp3", "p", pmp3)
+				}
+
+				if !converted {
+					os.Remove(pwav)
+
+					w.logger.InfoContext(ctx, "converting mp3 to wav", "p", pmp3)
+					err := common.MP3ToWavConverterConvert(w.converterRpc, common.MP3ToWavConverterArgs{
+						Playlist: w.id,
+						ClipID:   clip.Clip.ID,
+					})
+					if err != nil {
+						os.Remove(pwav)
+						w.logger.ErrorContext(ctx, "convert mp3 to wav", "p", pmp3, "err", err)
+						continue
+					}
+					w.logger.InfoContext(ctx, "converted mp3 to wav", "p", pmp3)
+				}
+
+				if clip.ClipWavInfo == nil {
+					dataOffset, dataSize, err := parseWav(pwav)
+					if err != nil {
+						w.logger.ErrorContext(ctx, "parse wav", "p", pwav, "err", err)
+						continue
+					}
+
+					w.logger.InfoContext(ctx, "added", "id", clip.Clip.ID, "offset", dataOffset, "data size", dataSize)
+					clip.ClipWavInfo = &ClipWavInfo{
 						DataOffset: dataOffset,
 						DataSize:   dataSize,
 					}
@@ -235,7 +321,7 @@ func (w *Worker) Close() error {
 func (w *Worker) Stream(ctx context.Context, writer io.Writer) error {
 	// TODO use buffer instead of reading files?
 
-	err := writeFull(writer, MP3Header)
+	err := writeFull(writer, infiniteWavHeader)
 	if err != nil {
 		return err
 	}
@@ -267,11 +353,15 @@ func (w *Worker) Stream(ctx context.Context, writer io.Writer) error {
 		}
 		w.playlistLock.Unlock()
 
-		if clip == nil || clip.ClipMP3Info == nil {
+		if clip == nil || clip.ClipWavInfo == nil {
 			wait(time.Millisecond * 100)
 			continue
 		}
 
+		w.logger.InfoContext(ctx, "streaming clip",
+			"clip", clip.Clip.ID,
+			"offset", clip.ClipWavInfo.DataOffset,
+			"size", clip.ClipWavInfo.DataSize)
 		err = w.streamClip(ctx, writer, clip)
 		if err != nil {
 			return err
@@ -280,8 +370,8 @@ func (w *Worker) Stream(ctx context.Context, writer io.Writer) error {
 }
 
 func (w *Worker) streamClip(ctx context.Context, writer io.Writer, clip *PlaylistClip) error {
-	p := path.Join(w.dir, fmt.Sprintf("%s.mp3", clip.Clip.ID))
-	f, err := os.Open(p)
+	pwav := path.Join(w.dir, fmt.Sprintf("%s.wav", clip.Clip.ID))
+	f, err := os.Open(pwav)
 	if err != nil {
 		return err
 	}
@@ -291,41 +381,45 @@ func (w *Worker) streamClip(ctx context.Context, writer io.Writer, clip *Playlis
 	if err != nil {
 		return err
 	}
-	minSize := clip.ClipMP3Info.DataOffset + clip.ClipMP3Info.DataSize
+	minSize := clip.ClipWavInfo.DataOffset + clip.ClipWavInfo.DataSize
 	if stat.Size() < int64(minSize) {
 		err = fmt.Errorf("file size %s", clip.Clip.ID)
 		// delete file with wrong size
-		defer os.Remove(p)
+		defer os.Remove(pwav)
 		return err
 	}
 
-	pos, err := f.Seek(int64(clip.ClipMP3Info.DataOffset), io.SeekStart)
+	pos, err := f.Seek(int64(clip.ClipWavInfo.DataOffset), io.SeekStart)
 	if err != nil {
 		return err
 	}
 
-	if pos != int64(clip.ClipMP3Info.DataOffset) {
+	if pos != int64(clip.ClipWavInfo.DataOffset) {
 		err = fmt.Errorf("seek %s", clip.Clip.ID)
 		return err
 	}
 
-	_, err = io.CopyN(writer, f, int64(clip.ClipMP3Info.DataSize))
+	_, err = io.CopyN(writer, f, int64(clip.ClipWavInfo.DataSize))
 	if err != nil {
 		return err
 	}
 
-	return w.paddingSilence(ctx, writer)
+	return w.paddingSilence(ctx, writer, time.Second*3)
 }
 
-func (w *Worker) paddingSilence(ctx context.Context, writer io.Writer) error {
-	for range 30 { // 3s silence
+func (w *Worker) paddingSilence(ctx context.Context, writer io.Writer, duration time.Duration) error {
+	count := 1
+	if duration > time.Millisecond*100 {
+		count = int(duration / (time.Millisecond * 100))
+	}
+	for range count {
 		select {
 		case <-ctx.Done():
 			return nil
 		default:
 		}
 
-		err := writeFull(writer, MP3Silence100ms[len(MP3Header):])
+		err := writeFull(writer, PCMSilence100ms)
 		if err != nil {
 			return err
 		}

@@ -7,18 +7,26 @@ import (
 )
 
 type ServerConfig struct {
-	LogLevel string `yaml:"log_level"`
-	Addr     string `yaml:"addr"`
-	DataDir  string `yaml:"data_dir"`
-	Auth     string `yaml:"auth"`
+	LogLevel    string `yaml:"log_level"`
+	Addr        string `yaml:"addr"`
+	DataDir     string `yaml:"data_dir"`
+	Auth        string `yaml:"auth"`
+	Cloudflared *bool  `yaml:"cloudflared"`
+	RPC         string `yaml:"rpc"`
+}
+
+func boolPtr(b bool) *bool {
+	return &b
 }
 
 // TODO do this with tag?
 var defaultServerConfig = ServerConfig{
-	LogLevel: "info",
-	Addr:     "127.0.0.1:3000",
-	DataDir:  "data",
-	Auth:     "",
+	LogLevel:    "info",
+	Addr:        "127.0.0.1:3000",
+	DataDir:     "data",
+	Auth:        "",
+	Cloudflared: boolPtr(true),
+	RPC:         "127.0.0.1:3001",
 }
 
 func LoadFromYaml(p string) (*ServerConfig, error) {
@@ -49,6 +57,14 @@ func LoadFromYaml(p string) (*ServerConfig, error) {
 
 	if s.LogLevel == "" {
 		s.LogLevel = defaultServerConfig.LogLevel
+	}
+
+	if s.Cloudflared == nil {
+		s.Cloudflared = defaultServerConfig.Cloudflared
+	}
+
+	if s.RPC == "" {
+		s.RPC = defaultServerConfig.RPC
 	}
 
 	return &s, nil

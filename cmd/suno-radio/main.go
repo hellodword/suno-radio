@@ -7,6 +7,7 @@ import (
 	"flag"
 	"log/slog"
 	"net/http"
+	"net/rpc"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -19,14 +20,11 @@ import (
 	"github.com/go-chi/chi"
 	"github.com/go-chi/cors"
 	"github.com/go-chi/render"
+	"github.com/hellodword/suno-radio/internal/cloudflared"
+	"github.com/hellodword/suno-radio/internal/common"
 	"github.com/hellodword/suno-radio/internal/config"
 	"github.com/hellodword/suno-radio/internal/httperr"
-	"github.com/hellodword/suno-radio/pkg/cloudflared"
-	"github.com/hellodword/suno-radio/pkg/suno"
-)
-
-const (
-	UUIDLength = 36
+	"github.com/hellodword/suno-radio/internal/suno"
 )
 
 func main() {
@@ -50,9 +48,17 @@ func main() {
 
 	os.MkdirAll(conf.DataDir, 0755)
 
+	time.Sleep(time.Second)
+	rpcCient, err := rpc.DialHTTP("tcp", conf.RPC)
+	if err != nil {
+		panic(err)
+	}
+
 	// cache and reuse the *.trycloudflare.com
 	// nginx is too heavy for this so ...
-	cloudflared.Start(filepath.Join(conf.DataDir, "cloudflared.json"), logger)
+	if *conf.Cloudflared {
+		cloudflared.Start(filepath.Join(conf.DataDir, "cloudflared.json"), logger)
+	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -60,7 +66,7 @@ func main() {
 	var wg sync.WaitGroup
 	var errC = make(chan error)
 
-	pool := suno.NewWorkerPool(logger, time.Minute*30, conf.DataDir)
+	pool := suno.NewWorkerPool(logger, time.Minute*30, conf.DataDir, rpcCient)
 
 	wg.Add(1)
 	go func() {
@@ -152,7 +158,7 @@ func Radio(pool *suno.WorkerPool, logger *slog.Logger) func(w http.ResponseWrite
 			}
 		}
 
-		if len(id) != UUIDLength {
+		if len(id) != common.UUIDLength {
 			_ = render.Render(w, r, httperr.ErrHTTPStatus(http.StatusBadRequest, nil))
 			return
 		}
@@ -168,8 +174,8 @@ func Radio(pool *suno.WorkerPool, logger *slog.Logger) func(w http.ResponseWrite
 
 		w.Header().Set("Content-Type", "audio/mp3")
 
-		// TODO find and explain a proper value
-		responseWriter := bwlimit.NewWriter(w, 32*bwlimit.KB)
+		// larger than 1s PCM size
+		responseWriter := bwlimit.NewWriter(w, (suno.PCMLenOf100ms*10/1000+3)*bwlimit.KB)
 
 		if err := worker.Stream(r.Context(), responseWriter); err != nil {
 			// logger.ErrorContext(r.Context(), "Radio", "id", id, "err", err)
@@ -184,7 +190,7 @@ func AddPlaylist(ctx context.Context, pool *suno.WorkerPool, logger *slog.Logger
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
 
-		if len(id) != UUIDLength {
+		if len(id) != common.UUIDLength {
 			_ = render.Render(w, r, httperr.ErrHTTPStatus(http.StatusBadRequest, nil))
 			return
 		}

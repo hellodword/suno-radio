@@ -2,13 +2,15 @@
 
 [![Matrix Space](https://img.shields.io/matrix/suno-radio:matrix.org)](https://matrix.to/#/#suno-radio:matrix.org)
 
+![](./images/logo.png)
+
 Turn a suno playlist into a random music radio!
 
 I'm very new about streaming media, so this tool maybe buggy, PR welcomes!
 
 ## Usage
 
-Basicly it's an infinite MP3 stream, so we can play it anywhere:
+Basicly it's an infinite WAV stream, so we can play it almost anywhere, browsers, players, or in the cli:
 
 ```sh
 curl -s http://127.0.0.1:3000/v1/playlist/trending | \
@@ -45,27 +47,13 @@ Bravo! You've got your own music radio! It's hosted on `http://127.0.0.1:3000/v1
 
 - Requirements:
   - **Go 1.22+**
-  - ffmpeg for generating [silence.mp3](./pkg/suno/silence.mp3)
+  - ffmpeg for converting mp3 to wav
 
 ```sh
 git clone --depth=1 https://github.com/hellodword/suno-radio
 cd suno-radio
 
-go build -trimpath -ldflags "-s -w" -o suno-radio -buildvcs=false ./cmd/suno-radio
-# or build with docker
-# docker run --rm -v "$(pwd)":/tmp/src -w /tmp/src golang:1-bullseye \
-#  go build -trimpath -ldflags "-s -w" -o suno-radio -buildvcs=false ./cmd/suno-radio
-
-./suno-radio -config ./server.yml
-```
-
-On my lowend VPS:
-
-```sh
-docker compose stats --format "table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}" --no-stream
-# NAME               CPU %     MEM USAGE
-# suno-radio-pub-1   0.08%     20.28MiB
-# suno-radio-app-1   0.00%     12.35MiB
+./scripts/build.sh
 ```
 
 ## TODO
@@ -77,3 +65,5 @@ docker compose stats --format "table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}" --n
 - https://coderadio.freecodecamp.org/
 - https://en.wikipedia.org/wiki/MP3#/media/File:MP3filestructure.svg
 - https://github.com/hajimehoshi/go-mp3/tree/v0.3.4
+- https://github.com/u2takey/ffmpeg-go
+- https://web.archive.org/web/20240406122535/http://soundfile.sapp.org/doc/WaveFormat/

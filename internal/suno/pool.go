@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/rpc"
 	"os"
 	"path"
 	"sync"
@@ -18,10 +19,12 @@ type WorkerPool struct {
 	dir      string
 	interval time.Duration
 	logger   *slog.Logger
+
+	converterRpc *rpc.Client
 }
 
-func NewWorkerPool(logger *slog.Logger, interval time.Duration, dir string) *WorkerPool {
-	return &WorkerPool{dir: dir, interval: interval, logger: logger}
+func NewWorkerPool(logger *slog.Logger, interval time.Duration, dir string, converterRpc *rpc.Client) *WorkerPool {
+	return &WorkerPool{dir: dir, interval: interval, logger: logger, converterRpc: converterRpc}
 }
 
 func (p *WorkerPool) Contains(id string) bool {
@@ -68,7 +71,7 @@ func (p *WorkerPool) Add(ctx context.Context, id string) error {
 		return err
 	}
 
-	worker, err := NewWorker(ctx, p.logger.With("id", id), id, p.interval, dir)
+	worker, err := NewWorker(ctx, p.logger.With("id", id), id, p.interval, dir, p.converterRpc)
 	if err != nil {
 		return err
 	}
