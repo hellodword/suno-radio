@@ -8,17 +8,13 @@ services:
         limits:
           cpus: "0.5"
           memory: 768M
-    logging:
-      driver: "local"
-      options:
-        max-size: "50m"
     image: linuxserver/ffmpeg:latest
-    restart: always
+    restart: no
     user: "65532:65532"
     volumes:
       - .:/w:rw
     working_dir: "/w"
-    entrypoint: ["/w/mp3-to-wav"]
+    entrypoint: ["/w/mp3-to-ogg"]
     healthcheck:
       test: ["CMD", "nc", "-z", "127.0.0.1", "3001"]
       interval: 1s
@@ -31,16 +27,12 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "0.7"
-          memory: 768M
-    logging:
-      driver: "local"
-      options:
-        max-size: "50m"
+          cpus: "0.5"
+          memory: 256M
     image: gcr.io/distroless/base-debian12:nonroot
-    restart: always
-    # ports:
-    #   - "127.0.0.1:3000:3000"
+    restart: no
+    ports:
+      - "3000:3000"
     volumes:
       # https://github.com/GoogleContainerTools/distroless/issues/427#issuecomment-547874186
       # mkdir data; chown 65532:65532 data
@@ -52,18 +44,3 @@ services:
         "-config",
         "/home/nonroot/suno-radio/server.yml",
       ]
-
-  pub:
-    deploy:
-      resources:
-        limits:
-          cpus: "0.5"
-          memory: 512M
-    logging:
-      driver: "local"
-      options:
-        max-size: "10m"
-    network_mode: "service:app"
-    image: cloudflare/cloudflared:latest
-    restart: always
-    command: tunnel --no-autoupdate --loglevel info --transport-loglevel fatal --quick-service http://127.0.0.1:7890 --url http://127.0.0.1:3000

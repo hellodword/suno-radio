@@ -7,7 +7,6 @@ import (
 	"flag"
 	"log/slog"
 	"net/http"
-	"net/rpc"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -16,7 +15,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/conduitio/bwlimit"
 	"github.com/go-chi/chi"
 	"github.com/go-chi/cors"
 	"github.com/go-chi/render"
@@ -24,6 +22,8 @@ import (
 	"github.com/hellodword/suno-radio/internal/common"
 	"github.com/hellodword/suno-radio/internal/config"
 	"github.com/hellodword/suno-radio/internal/httperr"
+	"github.com/hellodword/suno-radio/internal/mp3toogg"
+	"github.com/hellodword/suno-radio/internal/ogg"
 	"github.com/hellodword/suno-radio/internal/suno"
 )
 
@@ -48,8 +48,7 @@ func main() {
 
 	os.MkdirAll(conf.DataDir, 0755)
 
-	time.Sleep(time.Second)
-	rpcCient, err := rpc.DialHTTP("tcp", conf.RPC)
+	err = mp3toogg.MP3ToOggInit(conf.RPC)
 	if err != nil {
 		panic(err)
 	}
@@ -66,21 +65,36 @@ func main() {
 	var wg sync.WaitGroup
 	var errC = make(chan error)
 
-	pool := suno.NewWorkerPool(logger, time.Minute*30, conf.DataDir, rpcCient)
+	pool := suno.NewWorkerPool(logger, time.Minute*30, conf.DataDir)
 
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
 
-		for _, playlist := range []string{suno.PlaylistTrending, suno.PlaylistNew} {
-			err := pool.Add(ctx, playlist)
+		for _, id := range *conf.Playlist {
+			logger.Info("pool adding", "playlist", id)
+			// alias
+			if len(id) != common.UUIDLength {
+				if _id, ok := suno.PlayListPreset[id]; ok {
+					id = _id
+				}
+			}
+
+			if len(id) != common.UUIDLength {
+				logger.Error("invalid playlist", "playlist", id, "err", err)
+				continue
+			}
+
+			err := pool.Add(ctx, id)
 			if err != nil {
-				logger.Error("pool add", "playlist", playlist, "err", err)
+				logger.Error("pool add", "playlist", id, "err", err)
 				if os.IsPermission(err) || os.IsNotExist(err) {
 					errC <- err
 					return
 				}
 			}
+
+			logger.Info("pool added", "playlist", id)
 		}
 	}()
 
@@ -120,7 +134,7 @@ func main() {
 	signal.Notify(exit, os.Interrupt, syscall.SIGTERM)
 	select {
 	case <-exit:
-	case <-errC:
+	case err = <-errC:
 	}
 	if server != nil {
 		// server.Shutdown(ctx)
@@ -129,7 +143,6 @@ func main() {
 	cancel()
 	wg.Wait()
 	pool.Close()
-
 }
 
 func GetPlaylists(pool *suno.WorkerPool, logger *slog.Logger) func(w http.ResponseWriter, r *http.Request) {
@@ -148,13 +161,10 @@ func Radio(pool *suno.WorkerPool, logger *slog.Logger) func(w http.ResponseWrite
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
 
-		{
-			// alias
-			l := len(id)
-			if l == len("new") && id == "new" {
-				id = suno.PlaylistNew
-			} else if l == len("trending") && id == "trending" {
-				id = suno.PlaylistTrending
+		// alias
+		if len(id) != common.UUIDLength {
+			if _id, ok := suno.PlayListPreset[id]; ok {
+				id = _id
 			}
 		}
 
@@ -172,12 +182,9 @@ func Radio(pool *suno.WorkerPool, logger *slog.Logger) func(w http.ResponseWrite
 		logger.DebugContext(r.Context(), "Radio", "id", id)
 		worker := pool.Get(id)
 
-		w.Header().Set("Content-Type", "audio/mp3")
+		w.Header().Set("Content-Type", ogg.MIMEType)
 
-		// larger than 1s PCM size
-		responseWriter := bwlimit.NewWriter(w, (suno.PCMLenOf100ms*10/1000+3)*bwlimit.KB)
-
-		if err := worker.Stream(r.Context(), responseWriter); err != nil {
+		if err := worker.Stream(r.RemoteAddr, r.Context(), w); err != nil {
 			// logger.ErrorContext(r.Context(), "Radio", "id", id, "err", err)
 			logger.DebugContext(r.Context(), "Radio", "id", id, "err", err)
 			// _ = render.Render(w, r, types.ErrHTTPStatus(http.StatusInternalServerError, err))
@@ -189,6 +196,13 @@ func Radio(pool *suno.WorkerPool, logger *slog.Logger) func(w http.ResponseWrite
 func AddPlaylist(ctx context.Context, pool *suno.WorkerPool, logger *slog.Logger) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
+
+		// alias
+		if len(id) != common.UUIDLength {
+			if _id, ok := suno.PlayListPreset[id]; ok {
+				id = _id
+			}
+		}
 
 		if len(id) != common.UUIDLength {
 			_ = render.Render(w, r, httperr.ErrHTTPStatus(http.StatusBadRequest, nil))

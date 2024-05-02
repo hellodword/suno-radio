@@ -8,8 +8,7 @@ import (
 type DownloadStatus uint8
 
 type PlaylistClip struct {
-	ClipWavInfo *ClipWavInfo `json:"clip_mp3_info,omitempty"`
-	Clip        struct {
+	Clip struct {
 		ID string `json:"id,omitempty"`
 		// VideoURL          string `json:"video_url,omitempty"`
 		AudioURL string `json:"audio_url,omitempty"`
@@ -81,12 +80,7 @@ type Playlist struct {
 	// IsDiscoverPlaylist any    `json:"is_discover_playlist,omitempty"`
 }
 
-type ClipWavInfo struct {
-	DataSize   uint64 `json:"data_size,omitempty"`
-	DataOffset uint64 `json:"data_offset,omitempty"`
-}
-
-type PlaylistInfos []PlaylistInfo
+type PlaylistInfos []map[string]any
 
 func (PlaylistInfos) Render(http.ResponseWriter, *http.Request) error {
 	return nil

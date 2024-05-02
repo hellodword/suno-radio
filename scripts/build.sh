@@ -14,10 +14,13 @@ docker exec suno-radio-builder \
   go build -trimpath -ldflags "-s -w" -o dist/suno-radio -buildvcs=false ./cmd/suno-radio
 
 docker exec suno-radio-builder \
-  go build -trimpath -ldflags "-s -w" -o dist/mp3-to-wav -buildvcs=false ./cmd/mp3-to-wav
+  go build -trimpath -ldflags "-s -w" -o dist/mp3-to-ogg -buildvcs=false ./cmd/mp3-to-ogg
 
 docker kill suno-radio-builder && sleep 1s || true
 docker rm suno-radio-builder || true
 
+cp docker-compose.deploy.yml dist/docker-compose.yml
+cp server.yml dist/server.yml
+
 rm -f dist/suno-radio.zip
-zip -j dist/suno-radio.zip dist/suno-radio dist/mp3-to-wav server.yml docker-compose.yml
+zip -j dist/suno-radio.zip dist/suno-radio dist/mp3-to-ogg dist/server.yml dist/docker-compose.yml

@@ -10,18 +10,14 @@ I'm very new about streaming media, so this tool maybe buggy, PR welcomes!
 
 ## Usage
 
-Basicly it's an infinite WAV stream, so we can play it almost anywhere, browsers, players, or in the cli:
+Basicly it's an ogg, so we can play it almost anywhere, browsers (not the iOS safari), players, or in the cli:
 
 ```sh
 curl -s http://127.0.0.1:3000/v1/playlist/trending | \
-  ffplay -autoexit -nodisp -loglevel quiet -
+  ffplay -hide_banner -autoexit -nodisp -
 
 curl -s http://127.0.0.1:3000/v1/playlist/trending | \
   mpv -
-
-# a test instance for myself, maybe unstable
-curl -s https://revisions-shoes-terrorists-endorsed.trycloudflare.com/v1/playlist/trending | \
-  ffplay -autoexit -nodisp -loglevel quiet -
 ```
 
 - Get all playlists
@@ -43,11 +39,33 @@ curl -X PUT -H 'SUNO-RADIO-AUTH: VMkBqnjDUtQB65a9eDKSFhgAIhs8pPdri7rzrd7RO2w' \
 
 Bravo! You've got your own music radio! It's hosted on `http://127.0.0.1:3000/v1/playlist/cc14084a-2622-4c4b-8258-1f6b4b4f54b3`
 
+## Online demo
+
+This is an instance for myself, hosted on a very low-end VPS, so it's unstable:
+
+```sh
+# list available playlists
+curl -s https://gas-observe-ky-mention.trycloudflare.com/v1/playlist | jq
+
+# There're some alias same with the official playlists
+curl -s https://gas-observe-ky-mention.trycloudflare.com/v1/playlist/trending | \
+  ffplay -hide_banner -autoexit -nodisp -
+
+curl -s https://gas-observe-ky-mention.trycloudflare.com/v1/playlist/weekly | \
+  ffplay -hide_banner -autoexit -nodisp -
+
+curl -s https://gas-observe-ky-mention.trycloudflare.com/v1/playlist/monthly | \
+  ffplay -hide_banner -autoexit -nodisp -
+
+curl -s https://gas-observe-ky-mention.trycloudflare.com/v1/playlist/top | \
+  ffplay -hide_banner -autoexit -nodisp -
+```
+
 ## Build
 
 - Requirements:
   - **Go 1.22+**
-  - ffmpeg for converting mp3 to wav
+  - ffmpeg for converting mp3 to ogg
 
 ```sh
 git clone --depth=1 https://github.com/hellodword/suno-radio
@@ -63,7 +81,3 @@ cd suno-radio
 ## Thanks
 
 - https://coderadio.freecodecamp.org/
-- https://en.wikipedia.org/wiki/MP3#/media/File:MP3filestructure.svg
-- https://github.com/hajimehoshi/go-mp3/tree/v0.3.4
-- https://github.com/u2takey/ffmpeg-go
-- https://web.archive.org/web/20240406122535/http://soundfile.sapp.org/doc/WaveFormat/

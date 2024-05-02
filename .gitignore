@@ -10,3 +10,7 @@ suno-radio
 mp3-to-wav
 !/cmd/mp3-to-wav
 dist
+*.ogg
+.3rd
+mp3-to-ogg
+!/cmd/mp3-to-ogg

@@ -1,10 +1,15 @@
 # available value: debug, info, warn, error
-log_level: info
-addr: "127.0.0.1:3000"
+log_level: debug
+addr: "0.0.0.0:3000"
 # default value: data
 data_dir: data
 # disable the ability of adding new playlist by keeping it empty
 # generate your own auth string
 auth: VMkBqnjDUtQB65a9eDKSFhgAIhs8pPdri7rzrd7RO2w
 cloudflared: false
-rpc: "127.0.0.1:3001"
+rpc: "converter:3001"
+# playlist:
+#   - trending
+#   - weekly
+#   - monthly
+#   - top

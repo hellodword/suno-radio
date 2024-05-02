@@ -7,12 +7,13 @@ import (
 )
 
 type ServerConfig struct {
-	LogLevel    string `yaml:"log_level"`
-	Addr        string `yaml:"addr"`
-	DataDir     string `yaml:"data_dir"`
-	Auth        string `yaml:"auth"`
-	Cloudflared *bool  `yaml:"cloudflared"`
-	RPC         string `yaml:"rpc"`
+	LogLevel    string    `yaml:"log_level"`
+	Addr        string    `yaml:"addr"`
+	DataDir     string    `yaml:"data_dir"`
+	Auth        string    `yaml:"auth"`
+	Cloudflared *bool     `yaml:"cloudflared"`
+	RPC         string    `yaml:"rpc"`
+	Playlist    *[]string `yaml:"playlist"`
 }
 
 func boolPtr(b bool) *bool {
@@ -27,6 +28,9 @@ var defaultServerConfig = ServerConfig{
 	Auth:        "",
 	Cloudflared: boolPtr(true),
 	RPC:         "127.0.0.1:3001",
+	Playlist: &[]string{
+		"trending",
+	},
 }
 
 func LoadFromYaml(p string) (*ServerConfig, error) {
@@ -65,6 +69,10 @@ func LoadFromYaml(p string) (*ServerConfig, error) {
 
 	if s.RPC == "" {
 		s.RPC = defaultServerConfig.RPC
+	}
+
+	if s.Playlist == nil {
+		s.Playlist = defaultServerConfig.Playlist
 	}
 
 	return &s, nil

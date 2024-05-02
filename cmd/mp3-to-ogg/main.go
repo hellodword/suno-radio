@@ -2,6 +2,8 @@ package main
 
 import (
 	"errors"
+	"flag"
+	"log"
 	"net"
 	"net/http"
 	"net/rpc"
@@ -11,22 +13,27 @@ import (
 	"syscall"
 
 	"github.com/hellodword/suno-radio/internal/common"
+	"github.com/hellodword/suno-radio/internal/mp3toogg"
 )
 
 func main() {
+	addr := flag.String("addr", ":3001", "")
+	flag.Parse()
+
 	err := common.CheckFfmpeg()
 	if err != nil {
 		panic(err)
 	}
 
-	converter := new(common.MP3ToWavConverter)
+	converter := &mp3toogg.MP3ToOgg{}
 	err = rpc.Register(converter)
 	if err != nil {
 		panic(err)
 	}
 
 	rpc.HandleHTTP()
-	l, err := net.Listen("tcp", ":3001")
+	log.Println("RPC listening on", *addr)
+	l, err := net.Listen("tcp", *addr)
 	if err != nil {
 		panic(err)
 	}
