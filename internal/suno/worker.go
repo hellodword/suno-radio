@@ -20,6 +20,7 @@ import (
 
 type Worker struct {
 	id       string
+	alias    string
 	playlist *Playlist
 
 	dir      string
@@ -36,12 +37,16 @@ type Worker struct {
 	beginTime time.Time
 
 	streamCount int32
+
+	listeningCLipID atomic.Value
+
+	canceled int32
 }
 
-func NewWorker(ctx context.Context, logger *slog.Logger, id string, interval time.Duration, dir string) (*Worker, error) {
+func NewWorker(ctx context.Context, logger *slog.Logger, id, alias string, interval time.Duration, dir string) (*Worker, error) {
 	var err error
 
-	w := &Worker{id: id, interval: interval, dir: dir, logger: logger,
+	w := &Worker{id: id, alias: alias, interval: interval, dir: dir, logger: logger,
 		broadcaster: broadcast.NewRelay[*oggPage](),
 	}
 
@@ -57,12 +62,21 @@ func NewWorker(ctx context.Context, logger *slog.Logger, id string, interval tim
 	return w, nil
 }
 
-func (w *Worker) ID() string { return w.id }
+func (w *Worker) ID() string    { return w.id }
+func (w *Worker) Alias() string { return w.alias }
 func (w *Worker) Info() map[string]any {
-	return map[string]any{
+
+	m := map[string]any{
 		"info":     w.playlist.PlaylistInfo,
 		"listener": atomic.LoadInt32(&w.streamCount),
 	}
+
+	listening := w.listeningCLipID.Load()
+	if listening != nil && listening.(string) != "" {
+		m["listening"] = listening.(string)
+	}
+
+	return m
 }
 
 func (w *Worker) Start(ctx context.Context) {
@@ -143,6 +157,9 @@ func (w *Worker) Start(ctx context.Context) {
 				}
 			}
 			for _, clip := range append(clipsDownloaded, clipsNotDownloaded...) {
+				if atomic.LoadInt32(&w.canceled) != 0 {
+					return
+				}
 
 				select {
 				case <-ctx.Done():
@@ -194,6 +211,10 @@ func (w *Worker) Start(ctx context.Context) {
 		download()
 
 		for {
+			if atomic.LoadInt32(&w.canceled) != 0 {
+				return
+			}
+
 			select {
 			case <-ctx.Done():
 				return
@@ -216,6 +237,10 @@ func (w *Worker) Start(ctx context.Context) {
 
 		for {
 			time.Sleep(time.Millisecond * 50)
+
+			if atomic.LoadInt32(&w.canceled) != 0 {
+				return
+			}
 
 			select {
 			case <-ctx.Done():
@@ -255,7 +280,9 @@ func (w *Worker) Start(ctx context.Context) {
 			}
 
 			w.logger.InfoContext(ctx, "streaming ogg", "p", pogg)
+			w.listeningCLipID.Store(clip.Clip.ID)
 			err = w.streamOgg(ctx, f)
+			w.listeningCLipID.Store("")
 			f.Close()
 			if err != nil {
 				w.logger.ErrorContext(ctx, "stream ogg", "p", pogg, "err", err)
@@ -271,6 +298,7 @@ func (w *Worker) Start(ctx context.Context) {
 }
 
 func (w *Worker) Close() error {
+	atomic.StoreInt32(&w.canceled, 1)
 	w.broadcaster.Close()
 	w.wg.Wait()
 	return nil
@@ -333,6 +361,15 @@ func (w *Worker) Stream(id string, ctx context.Context, writer io.Writer) error 
 			return context.Canceled
 		case page := <-listener.Ch():
 			{
+				if page == nil {
+					// ???
+					return context.Canceled
+				}
+
+				if atomic.LoadInt32(&w.canceled) != 0 {
+					return context.Canceled
+				}
+
 				w.logger.Debug("Subscribe got msg", "stream id", id, "granule", page.granule)
 				defer w.logger.Debug("Subscribe got msg exited", "stream id", id, "granule", page.granule)
 
@@ -352,6 +389,9 @@ func (w *Worker) streamOgg(ctx context.Context, f io.Reader) error {
 	var lastGranule int64
 
 	for atomic.LoadInt32(&w.streamCount) > 0 {
+		if atomic.LoadInt32(&w.canceled) != 0 {
+			return context.Canceled
+		}
 
 		select {
 		case <-ctx.Done():

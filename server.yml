@@ -9,7 +9,7 @@ auth: VMkBqnjDUtQB65a9eDKSFhgAIhs8pPdri7rzrd7RO2w
 cloudflared: false
 rpc: "converter:3001"
 # playlist:
-#   - trending
+# - trending/1190bf92-10dc-4ce5-968a-7a377f37f984
 #   - weekly
 #   - monthly
-#   - top
+# - top

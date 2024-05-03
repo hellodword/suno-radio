@@ -80,7 +80,7 @@ type Playlist struct {
 	// IsDiscoverPlaylist any    `json:"is_discover_playlist,omitempty"`
 }
 
-type PlaylistInfos []map[string]any
+type PlaylistInfos map[string]any
 
 func (PlaylistInfos) Render(http.ResponseWriter, *http.Request) error {
 	return nil

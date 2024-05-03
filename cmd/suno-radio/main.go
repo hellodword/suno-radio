@@ -18,6 +18,7 @@ import (
 	"github.com/go-chi/chi"
 	"github.com/go-chi/cors"
 	"github.com/go-chi/render"
+	"github.com/google/uuid"
 	"github.com/hellodword/suno-radio/internal/cloudflared"
 	"github.com/hellodword/suno-radio/internal/common"
 	"github.com/hellodword/suno-radio/internal/config"
@@ -71,30 +72,41 @@ func main() {
 	go func() {
 		defer wg.Done()
 
-		for _, id := range *conf.Playlist {
-			logger.Info("pool adding", "playlist", id)
-			// alias
-			if len(id) != common.UUIDLength {
-				if _id, ok := suno.PlayListPreset[id]; ok {
-					id = _id
+		for i := range *conf.Playlist {
+			logger.Info("pool adding", "playlist", (*conf.Playlist)[i])
+
+			var id, alias string
+			arr := strings.SplitN((*conf.Playlist)[i], "/", 2)
+			alias = arr[0]
+
+			if !validateAlias(alias) {
+				logger.Error("invalid playlist alias", "playlist", (*conf.Playlist)[i])
+				continue
+			}
+
+			if len(arr) == 2 {
+				id = arr[1]
+			} else {
+				if _, ok := suno.PlayListPreset[alias]; ok {
+					id = suno.PlayListPreset[alias]
 				}
 			}
 
 			if len(id) != common.UUIDLength {
-				logger.Error("invalid playlist", "playlist", id, "err", err)
+				logger.Error("invalid playlist id", "playlist", (*conf.Playlist)[i])
 				continue
 			}
 
-			err := pool.Add(ctx, id)
+			err := pool.Add(ctx, id, alias)
 			if err != nil {
-				logger.Error("pool add", "playlist", id, "err", err)
+				logger.Error("pool add", "playlist", (*conf.Playlist)[i], "err", err)
 				if os.IsPermission(err) || os.IsNotExist(err) {
 					errC <- err
 					return
 				}
 			}
 
-			logger.Info("pool added", "playlist", id)
+			logger.Info("pool added", "playlist", (*conf.Playlist)[i], "id", id, "alias", alias)
 		}
 	}()
 
@@ -108,7 +120,8 @@ func main() {
 			r.Get("/", GetPlaylists(pool, logger))
 			r.Get("/{id}", Radio(pool, logger))
 			if conf.Auth != "" {
-				r.With(Auth(conf.Auth)).Put("/{id}", AddPlaylist(ctx, pool, logger))
+				r.With(Auth(conf.Auth)).Put("/{id}/{alias}", AddPlaylist(ctx, pool, logger))
+				r.With(Auth(conf.Auth)).Delete("/{id}", RemovePlaylist(pool, logger))
 			}
 		})
 	})
@@ -161,14 +174,7 @@ func Radio(pool *suno.WorkerPool, logger *slog.Logger) func(w http.ResponseWrite
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
 
-		// alias
-		if len(id) != common.UUIDLength {
-			if _id, ok := suno.PlayListPreset[id]; ok {
-				id = _id
-			}
-		}
-
-		if len(id) != common.UUIDLength {
+		if !validateAlias(id) && !validateUUID(id) {
 			_ = render.Render(w, r, httperr.ErrHTTPStatus(http.StatusBadRequest, nil))
 			return
 		}
@@ -196,23 +202,17 @@ func Radio(pool *suno.WorkerPool, logger *slog.Logger) func(w http.ResponseWrite
 func AddPlaylist(ctx context.Context, pool *suno.WorkerPool, logger *slog.Logger) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
+		alias := strings.ToLower(chi.URLParam(r, "alias"))
 
-		// alias
-		if len(id) != common.UUIDLength {
-			if _id, ok := suno.PlayListPreset[id]; ok {
-				id = _id
-			}
-		}
-
-		if len(id) != common.UUIDLength {
+		if !validateAlias(alias) && !validateUUID(id) {
 			_ = render.Render(w, r, httperr.ErrHTTPStatus(http.StatusBadRequest, nil))
 			return
 		}
 
-		found := pool.Contains(id)
+		found := pool.Contains(id) || pool.Contains(alias)
 		if !found {
 			// the r.Context() wont work for this, pass the ctx from func main
-			err := pool.Add(ctx, id)
+			err := pool.Add(ctx, id, alias)
 			if err != nil {
 				logger.ErrorContext(r.Context(), "AddPlaylist", "err", err)
 				_ = render.Render(w, r, httperr.ErrHTTPStatus(http.StatusInternalServerError, err))
@@ -223,6 +223,31 @@ func AddPlaylist(ctx context.Context, pool *suno.WorkerPool, logger *slog.Logger
 		infos := pool.Infos()
 		if err := render.Render(w, r, infos); err != nil {
 			logger.ErrorContext(r.Context(), "AddPlaylist", "err", err)
+			_ = render.Render(w, r, httperr.ErrHTTPStatus(http.StatusUnprocessableEntity, err))
+			return
+		}
+	}
+}
+
+func RemovePlaylist(pool *suno.WorkerPool, logger *slog.Logger) func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id := chi.URLParam(r, "id")
+
+		if !validateAlias(id) && !validateUUID(id) {
+			_ = render.Render(w, r, httperr.ErrHTTPStatus(http.StatusBadRequest, nil))
+			return
+		}
+
+		err := pool.Remove(id)
+		if err != nil {
+			logger.ErrorContext(r.Context(), "RemovePlaylist", "err", err)
+			_ = render.Render(w, r, httperr.ErrHTTPStatus(http.StatusInternalServerError, err))
+			return
+		}
+
+		infos := pool.Infos()
+		if err := render.Render(w, r, infos); err != nil {
+			logger.ErrorContext(r.Context(), "RemovePlaylist", "err", err)
 			_ = render.Render(w, r, httperr.ErrHTTPStatus(http.StatusUnprocessableEntity, err))
 			return
 		}
@@ -242,4 +267,27 @@ func Auth(auth string) func(http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 		})
 	}
+}
+
+func validateUUID(s string) bool {
+	if len(s) != 36 {
+		return false
+	}
+
+	u, err := uuid.Parse(s)
+	return err == nil && u.String() == s
+}
+
+func validateAlias(alias string) bool {
+	if len(alias) < 3 || len(alias) > 32 {
+		return false
+	}
+
+	for _, b := range []byte(alias) {
+		if !(('a' <= b && b <= 'z') || ('0' <= b && b <= '9') || b == '_' || b == '-') {
+			return false
+		}
+	}
+
+	return true
 }

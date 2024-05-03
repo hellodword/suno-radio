@@ -12,8 +12,7 @@ import (
 )
 
 type WorkerPool struct {
-	lock sync.Mutex
-	pool []*Worker
+	pool sync.Map
 
 	dir      string
 	interval time.Duration
@@ -24,33 +23,49 @@ func NewWorkerPool(logger *slog.Logger, interval time.Duration, dir string) *Wor
 	return &WorkerPool{dir: dir, interval: interval, logger: logger}
 }
 
-func (p *WorkerPool) Contains(id string) bool {
-	for i := range p.pool {
-		if id == p.pool[i].ID() {
-			return true
+func (p *WorkerPool) Contains(idOrAlias string) bool {
+	found := false
+	p.pool.Range(func(key, value any) bool {
+		if value.(*Worker).ID() == idOrAlias || value.(*Worker).Alias() == idOrAlias {
+			found = true
+			return false
 		}
-	}
-	return false
+		return true
+	})
+	return found
 }
 
-func (p *WorkerPool) Get(id string) *Worker {
-	for i := range p.pool {
-		if id == p.pool[i].ID() {
-			return p.pool[i]
-		}
+func (p *WorkerPool) Remove(idOrAlias string) error {
+	w := p.Get(idOrAlias)
+	if w != nil {
+		p.pool.Delete(w.ID())
+		return w.Close()
 	}
 	return nil
 }
 
+func (p *WorkerPool) Get(idOrAlias string) *Worker {
+	var w *Worker
+	p.pool.Range(func(key, value any) bool {
+		if value.(*Worker).ID() == idOrAlias || value.(*Worker).Alias() == idOrAlias {
+			w = value.(*Worker)
+			return false
+		}
+		return true
+	})
+	return w
+}
+
 func (p *WorkerPool) Infos() PlaylistInfos {
-	var infos = make(PlaylistInfos, 0)
-	for i := range p.pool {
-		infos = append(infos, p.pool[i].Info())
-	}
+	var infos = make(PlaylistInfos)
+	p.pool.Range(func(key, value any) bool {
+		infos[value.(*Worker).Alias()] = value.(*Worker).Info()
+		return true
+	})
 	return infos
 }
 
-func (p *WorkerPool) Add(ctx context.Context, id string) error {
+func (p *WorkerPool) Add(ctx context.Context, id, alias string) error {
 	if p.Contains(id) {
 		return nil
 	}
@@ -68,14 +83,12 @@ func (p *WorkerPool) Add(ctx context.Context, id string) error {
 		return err
 	}
 
-	worker, err := NewWorker(ctx, p.logger.With("id", id), id, p.interval, dir)
+	worker, err := NewWorker(ctx, p.logger.With("id", id).With("alias", alias), id, alias, p.interval, dir)
 	if err != nil {
 		return err
 	}
 
-	p.lock.Lock()
-	p.pool = append(p.pool, worker)
-	p.lock.Unlock()
+	p.pool.Store(id, worker)
 
 	worker.Start(ctx)
 
@@ -83,8 +96,9 @@ func (p *WorkerPool) Add(ctx context.Context, id string) error {
 }
 
 func (p *WorkerPool) Close() error {
-	for i := range p.pool {
-		p.pool[i].Close()
-	}
+	p.pool.Range(func(_, value any) bool {
+		value.(*Worker).Close()
+		return true
+	})
 	return nil
 }

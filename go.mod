@@ -6,6 +6,7 @@ require (
 	github.com/go-chi/chi v1.5.5
 	github.com/go-chi/cors v1.2.1
 	github.com/go-chi/render v1.0.3
+	github.com/google/uuid v1.6.0
 	github.com/teivah/broadcast v0.1.0
 	github.com/u2takey/ffmpeg-go v0.5.0
 	gopkg.in/hraban/opus.v2 v2.0.0-20230925203106-0188a62cb302

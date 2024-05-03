@@ -33,11 +33,19 @@ You can get the playlist id from the URL, for example `cc14084a-2622-4c4b-8258-1
 Also, you'd like to create your own playlist on https://app.suno.ai/me/ and add clips into it.
 
 ```sh
+# foo is the alias of the playlist, name it with a [0-9a-z_-]{3,32} string
 curl -X PUT -H 'SUNO-RADIO-AUTH: VMkBqnjDUtQB65a9eDKSFhgAIhs8pPdri7rzrd7RO2w' \
-  http://127.0.0.1:3000/v1/playlist/cc14084a-2622-4c4b-8258-1f6b4b4f54b3
+  http://127.0.0.1:3000/v1/playlist/cc14084a-2622-4c4b-8258-1f6b4b4f54b3/foo
 ```
 
-Bravo! You've got your own music radio! It's hosted on `http://127.0.0.1:3000/v1/playlist/cc14084a-2622-4c4b-8258-1f6b4b4f54b3`
+Bravo! You've got your own music radio! It's hosted on `http://127.0.0.1:3000/v1/playlist/cc14084a-2622-4c4b-8258-1f6b4b4f54b3` and `http://127.0.0.1:3000/v1/playlist/foo`
+
+Delete the playlist by id:
+
+```sh
+curl -X DELETE -H 'SUNO-RADIO-AUTH: VMkBqnjDUtQB65a9eDKSFhgAIhs8pPdri7rzrd7RO2w' \
+  http://127.0.0.1:3000/v1/playlist/cc14084a-2622-4c4b-8258-1f6b4b4f54b3
+```
 
 ## Online demo
 
