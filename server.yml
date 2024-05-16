@@ -10,6 +10,6 @@ cloudflared: false
 rpc: "converter:3001"
 # playlist:
 # - trending/1190bf92-10dc-4ce5-968a-7a377f37f984
-#   - weekly
-#   - monthly
+# - weekly
+# - monthly
 # - top

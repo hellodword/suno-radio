@@ -52,7 +52,19 @@ services:
         "/home/nonroot/suno-radio/server.yml",
       ]
 
+  sleep:
+    depends_on:
+      converter:
+        condition: service_healthy
+    image: linuxserver/ffmpeg:latest
+    restart: no
+    entrypoint: ["/usr/bin/env"]
+    command: sleep 3s
+
   pub:
+    depends_on:
+      sleep:
+        condition: service_completed_successfully
     deploy:
       resources:
         limits:
@@ -65,4 +77,4 @@ services:
     network_mode: "service:app"
     image: cloudflare/cloudflared:latest
     restart: always
-    command: tunnel --no-autoupdate --loglevel info --transport-loglevel fatal --quick-service http://127.0.0.1:7890 --url http://127.0.0.1:3000
+    command: tunnel --no-autoupdate --loglevel info --transport-loglevel fatal --quick-service http://127.0.0.1:7890 --url http://127.0.0.1:3000 --protocol http2

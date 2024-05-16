@@ -53,19 +53,19 @@ This is an instance for myself, hosted on a very low-end VPS, so it's unstable:
 
 ```sh
 # list available playlists
-curl -s https://gas-observe-ky-mention.trycloudflare.com/v1/playlist | jq
+curl -s https://looked-livecam-formula-novel.trycloudflare.com/v1/playlist | jq
 
 # There're some alias same with the official playlists
-curl -s https://gas-observe-ky-mention.trycloudflare.com/v1/playlist/trending | \
+curl -s https://looked-livecam-formula-novel.trycloudflare.com/v1/playlist/trending | \
   ffplay -hide_banner -autoexit -nodisp -
 
-curl -s https://gas-observe-ky-mention.trycloudflare.com/v1/playlist/weekly | \
+curl -s https://looked-livecam-formula-novel.trycloudflare.com/v1/playlist/weekly | \
   ffplay -hide_banner -autoexit -nodisp -
 
-curl -s https://gas-observe-ky-mention.trycloudflare.com/v1/playlist/monthly | \
+curl -s https://looked-livecam-formula-novel.trycloudflare.com/v1/playlist/monthly | \
   ffplay -hide_banner -autoexit -nodisp -
 
-curl -s https://gas-observe-ky-mention.trycloudflare.com/v1/playlist/top | \
+curl -s https://looked-livecam-formula-novel.trycloudflare.com/v1/playlist/top | \
   ffplay -hide_banner -autoexit -nodisp -
 ```
 

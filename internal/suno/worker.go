@@ -71,9 +71,25 @@ func (w *Worker) Info() map[string]any {
 		"listener": atomic.LoadInt32(&w.streamCount),
 	}
 
-	listening := w.listeningCLipID.Load()
-	if listening != nil && listening.(string) != "" {
-		m["listening"] = listening.(string)
+	listener := atomic.LoadInt32(&w.streamCount)
+	if listener > 0 {
+		m["listener"] = listener
+		listeningV := w.listeningCLipID.Load()
+		if listeningV != nil {
+			if clip, ok := listeningV.(*PlaylistClip); ok {
+				var listening = map[string]any{
+					"title":        clip.Clip.Title,
+					"upvote_count": clip.Clip.UpvoteCount,
+					"url":          fmt.Sprintf("https://suno.com/song/%s", clip.Clip.ID),
+				}
+
+				if clip.Clip.Title != "" {
+					listening["title"] = clip.Clip.Title
+				}
+
+				m["listening"] = listening
+			}
+		}
 	}
 
 	return m
@@ -280,9 +296,8 @@ func (w *Worker) Start(ctx context.Context) {
 			}
 
 			w.logger.InfoContext(ctx, "streaming ogg", "p", pogg)
-			w.listeningCLipID.Store(clip.Clip.ID)
+			w.listeningCLipID.Store(clip)
 			err = w.streamOgg(ctx, f)
-			w.listeningCLipID.Store("")
 			f.Close()
 			if err != nil {
 				w.logger.ErrorContext(ctx, "stream ogg", "p", pogg, "err", err)
