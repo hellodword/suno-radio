@@ -5,6 +5,7 @@ import (
 	"crypto/subtle"
 	"errors"
 	"flag"
+	"io/fs"
 	"log/slog"
 	"net/http"
 	"os"
@@ -16,9 +17,9 @@ import (
 	"time"
 
 	"github.com/go-chi/chi"
-	"github.com/go-chi/cors"
 	"github.com/go-chi/render"
 	"github.com/google/uuid"
+	"github.com/hellodword/suno-radio/frontend"
 	"github.com/hellodword/suno-radio/internal/cloudflared"
 	"github.com/hellodword/suno-radio/internal/common"
 	"github.com/hellodword/suno-radio/internal/config"
@@ -26,6 +27,7 @@ import (
 	"github.com/hellodword/suno-radio/internal/mp3toogg"
 	"github.com/hellodword/suno-radio/internal/ogg"
 	"github.com/hellodword/suno-radio/internal/suno"
+	"github.com/jub0bs/cors"
 )
 
 func main() {
@@ -110,10 +112,36 @@ func main() {
 		}
 	}()
 
-	r := chi.NewRouter()
-	r.Use(cors.AllowAll().Handler)
+	corsMw, err := cors.NewMiddleware(cors.Config{
+		Origins: []string{"*"},
+		Methods: []string{
+			http.MethodHead,
+			http.MethodGet,
+			http.MethodPost,
+			http.MethodPut,
+			http.MethodPatch,
+			http.MethodDelete,
+		},
+		RequestHeaders: []string{"*"},
+		Credentialed:   false,
+	})
+	if err != nil {
+		panic(err)
+	}
+	corsMw.SetDebug(false)
 
-	// TODO embed a frontend player
+	r := chi.NewRouter()
+	r.Use(corsMw.Wrap)
+
+	dist, err := getDist()
+	if err != nil {
+		panic(err)
+	}
+	frontendServer := http.FileServer(dist)
+
+	r.Get("/*", func(w http.ResponseWriter, r *http.Request) {
+		frontendServer.ServeHTTP(w, r)
+	})
 
 	r.Route("/v1", func(r chi.Router) {
 		r.Route("/playlist", func(r chi.Router) {
@@ -267,6 +295,14 @@ func Auth(auth string) func(http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 		})
 	}
+}
+
+func getDist() (http.FileSystem, error) {
+	fsys, err := fs.Sub(frontend.Dist, "dist")
+	if err != nil {
+		return nil, err
+	}
+	return http.FS(fsys), nil
 }
 
 func validateUUID(s string) bool {

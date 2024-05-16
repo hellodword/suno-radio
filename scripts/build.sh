@@ -8,6 +8,9 @@ mkdir -p dist
 docker kill suno-radio-builder && sleep 1s || true
 docker rm suno-radio-builder || true
 
+rm -rf frontend/dist
+docker run --rm --user "$(id -u):$(id -g)" -v "$(pwd)/frontend":/tmp/src -w /tmp/src node:20 bash -c 'npm i && npm run build'
+
 docker run --name suno-radio-builder --rm -v "$(pwd)":/tmp/src -w /tmp/src -d golang:1-bullseye sleep infinity
 
 docker exec suno-radio-builder \

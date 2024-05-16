@@ -51,23 +51,7 @@ curl -X DELETE -H 'SUNO-RADIO-AUTH: VMkBqnjDUtQB65a9eDKSFhgAIhs8pPdri7rzrd7RO2w'
 
 This is an instance for myself, hosted on a very low-end VPS, so it's unstable:
 
-```sh
-# list available playlists
-curl -s https://looked-livecam-formula-novel.trycloudflare.com/v1/playlist | jq
-
-# There're some alias same with the official playlists
-curl -s https://looked-livecam-formula-novel.trycloudflare.com/v1/playlist/trending | \
-  ffplay -hide_banner -autoexit -nodisp -
-
-curl -s https://looked-livecam-formula-novel.trycloudflare.com/v1/playlist/weekly | \
-  ffplay -hide_banner -autoexit -nodisp -
-
-curl -s https://looked-livecam-formula-novel.trycloudflare.com/v1/playlist/monthly | \
-  ffplay -hide_banner -autoexit -nodisp -
-
-curl -s https://looked-livecam-formula-novel.trycloudflare.com/v1/playlist/top | \
-  ffplay -hide_banner -autoexit -nodisp -
-```
+[Online demo: https://looked-livecam-formula-novel.trycloudflare.com](https://looked-livecam-formula-novel.trycloudflare.com)
 
 ## Build
 
@@ -89,3 +73,4 @@ cd suno-radio
 ## Thanks
 
 - https://coderadio.freecodecamp.org/
+- https://github.com/madzadev/audio-player
