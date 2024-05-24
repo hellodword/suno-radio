@@ -51,7 +51,7 @@ curl -X DELETE -H 'SUNO-RADIO-AUTH: VMkBqnjDUtQB65a9eDKSFhgAIhs8pPdri7rzrd7RO2w'
 
 This is an instance for myself, hosted on a very low-end VPS, so it's unstable:
 
-[Online demo: https://looked-livecam-formula-novel.trycloudflare.com](https://looked-livecam-formula-novel.trycloudflare.com)
+[Online demo: https://gas-designers-appearing-one.trycloudflare.com](https://gas-designers-appearing-one.trycloudflare.com)
 
 ## Build
 
@@ -74,3 +74,4 @@ cd suno-radio
 
 - https://coderadio.freecodecamp.org/
 - https://github.com/madzadev/audio-player
+- https://github.com/rainner/soma-fm-player
