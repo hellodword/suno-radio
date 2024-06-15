@@ -26,6 +26,7 @@ services:
       timeout: 10s
 
   app:
+    hostname: app
     depends_on:
       converter:
         condition: service_healthy
@@ -52,19 +53,25 @@ services:
         "/home/nonroot/suno-radio/server.yml",
       ]
 
-  sleep:
+  wait:
     depends_on:
-      converter:
-        condition: service_healthy
+      app:
+        condition: service_started
     image: linuxserver/ffmpeg:latest
-    restart: no
+    restart: always
+    user: "65532:65532"
     entrypoint: ["/usr/bin/env"]
-    command: sleep 3s
+    command: >
+      sleep infinity
+    healthcheck:
+      test: ["CMD", "nc", "-z", "app", "7890"]
+      interval: 1s
+      timeout: 10s
 
   pub:
     depends_on:
-      sleep:
-        condition: service_completed_successfully
+      wait:
+        condition: service_healthy
     deploy:
       resources:
         limits:
@@ -74,7 +81,6 @@ services:
       driver: "local"
       options:
         max-size: "10m"
-    network_mode: "service:app"
     image: cloudflare/cloudflared:latest
     restart: always
-    command: tunnel --no-autoupdate --loglevel info --transport-loglevel fatal --quick-service http://127.0.0.1:7890 --url http://127.0.0.1:3000 --protocol http2
+    command: tunnel --no-autoupdate --loglevel info --transport-loglevel fatal --quick-service http://app:7890 --url http://app:3000 --protocol http2

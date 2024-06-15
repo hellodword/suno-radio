@@ -63,7 +63,7 @@ func Start(p string, logger *slog.Logger) {
 		w.Write(b)
 	})
 	server = &http.Server{
-		Addr:    "127.0.0.1:7890",
+		Addr:    "0.0.0.0:7890",
 		Handler: mux,
 	}
 	go func() {
