@@ -51,7 +51,7 @@ curl -X DELETE -H 'SUNO-RADIO-AUTH: VMkBqnjDUtQB65a9eDKSFhgAIhs8pPdri7rzrd7RO2w'
 
 This is an instance for myself, hosted on a very low-end VPS, so it's unstable:
 
-[Online demo: https://gas-designers-appearing-one.trycloudflare.com](https://gas-designers-appearing-one.trycloudflare.com)
+[Online demo: https://concord-composed-dui-worry.trycloudflare.com](https://concord-composed-dui-worry.trycloudflare.com)
 
 ## Build
 
