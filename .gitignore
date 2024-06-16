@@ -14,3 +14,4 @@ dist
 .3rd
 mp3-to-ogg
 !/cmd/mp3-to-ogg
+server.yml

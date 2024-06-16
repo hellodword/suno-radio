@@ -1,7 +1,6 @@
 version: "3"
 
 services:
-  # for security
   converter:
     hostname: converter
     deploy:
@@ -13,17 +12,14 @@ services:
       driver: "local"
       options:
         max-size: "50m"
-    image: linuxserver/ffmpeg:latest
+    build:
+      context: .
+      dockerfile: ./docker/converter.Dockerfile
     restart: always
     user: "65532:65532"
     volumes:
       - .:/w:rw
     working_dir: "/w"
-    entrypoint: ["/w/mp3-to-ogg"]
-    healthcheck:
-      test: ["CMD", "nc", "-z", "127.0.0.1", "3001"]
-      interval: 1s
-      timeout: 10s
 
   app:
     hostname: app
@@ -39,38 +35,19 @@ services:
       driver: "local"
       options:
         max-size: "50m"
-    image: gcr.io/distroless/base-debian12:nonroot
+    build:
+      context: .
+      dockerfile: ./docker/app.Dockerfile
     restart: always
     volumes:
       # https://github.com/GoogleContainerTools/distroless/issues/427#issuecomment-547874186
       # mkdir data; chown 65532:65532 data
       - .:/home/nonroot/suno-radio:rw
     working_dir: "/home/nonroot/suno-radio"
-    entrypoint:
-      [
-        "/home/nonroot/suno-radio/suno-radio",
-        "-config",
-        "/home/nonroot/suno-radio/server.yml",
-      ]
-
-  wait:
-    depends_on:
-      app:
-        condition: service_started
-    image: linuxserver/ffmpeg:latest
-    restart: always
-    user: "65532:65532"
-    entrypoint: ["/usr/bin/env"]
-    command: >
-      sleep infinity
-    healthcheck:
-      test: ["CMD", "nc", "-z", "app", "7890"]
-      interval: 1s
-      timeout: 10s
 
   pub:
     depends_on:
-      wait:
+      app:
         condition: service_healthy
     deploy:
       resources:

@@ -6,7 +6,7 @@ data_dir: data
 # disable the ability of adding new playlist by keeping it empty
 # generate your own auth string
 auth: VMkBqnjDUtQB65a9eDKSFhgAIhs8pPdri7rzrd7RO2w
-cloudflared: false
+cloudflared: true
 rpc: "converter:3001"
 playlist:
   - trending/1190bf92-10dc-4ce5-968a-7a377f37f984

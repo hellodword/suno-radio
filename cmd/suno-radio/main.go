@@ -37,7 +37,21 @@ func main() {
 	var logger = slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: loggerLevel}))
 
 	configPath := flag.String("config", "server.yml", "")
+
+	healthcheck := flag.String("healthcheck", "", "http://1.example.org,http://2.example.org")
 	flag.Parse()
+	if *healthcheck != "" {
+		http.DefaultClient.Timeout = time.Second
+		for _, healhealthcheckURL := range strings.Split(*healthcheck, ",") {
+			if healhealthcheckURL == "" {
+				continue
+			}
+			if _, err := http.Get(healhealthcheckURL); err != nil {
+				os.Exit(1)
+			}
+		}
+		os.Exit(0)
+	}
 
 	conf, err := config.LoadFromYaml(*configPath)
 	if err != nil {

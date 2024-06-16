@@ -9,8 +9,10 @@ import (
 	"net/rpc"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/hellodword/suno-radio/internal/common"
 	"github.com/hellodword/suno-radio/internal/mp3toogg"
@@ -18,7 +20,21 @@ import (
 
 func main() {
 	addr := flag.String("addr", ":3001", "")
+
+	healthcheck := flag.String("healthcheck", "", "http://1.example.org,http://2.example.org")
 	flag.Parse()
+	if *healthcheck != "" {
+		http.DefaultClient.Timeout = time.Second
+		for _, healhealthcheckURL := range strings.Split(*healthcheck, ",") {
+			if healhealthcheckURL == "" {
+				continue
+			}
+			if _, err := http.Get(healhealthcheckURL); err != nil {
+				os.Exit(1)
+			}
+		}
+		os.Exit(0)
+	}
 
 	err := common.CheckFfmpeg()
 	if err != nil {
