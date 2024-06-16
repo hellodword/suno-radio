@@ -51,19 +51,23 @@ curl -X DELETE -H 'SUNO-RADIO-AUTH: VMkBqnjDUtQB65a9eDKSFhgAIhs8pPdri7rzrd7RO2w'
 
 This is an instance for myself, hosted on a very low-end VPS, so it's unstable:
 
-[Online demo: https://concord-composed-dui-worry.trycloudflare.com](https://concord-composed-dui-worry.trycloudflare.com)
+[Online demo: https://folks-norwegian-disaster-quebec.trycloudflare.com](https://folks-norwegian-disaster-quebec.trycloudflare.com)
 
 ## Build
-
-- Requirements:
-  - **Go 1.22+**
-  - ffmpeg for converting mp3 to ogg
 
 ```sh
 git clone --depth=1 https://github.com/hellodword/suno-radio
 cd suno-radio
 
-./scripts/build.sh
+cp server.yml.template server.yml
+vim server.yml
+
+mkdir -p data
+sudo chown -R 65532:65532 data
+
+docker compose up --build --pull always -d
+
+# docker compose logs -f
 ```
 
 ## TODO
